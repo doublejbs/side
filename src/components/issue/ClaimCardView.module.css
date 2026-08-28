@@ -1,0 +1,30 @@
+.card {
+  gap: 12px;
+  min-height: 172px;
+}
+
+.title {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.3px;
+}
+
+.description {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-muted);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.evidenceLink {
+  margin-left: auto;
+  white-space: nowrap;
+}

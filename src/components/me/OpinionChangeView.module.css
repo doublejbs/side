@@ -1,0 +1,89 @@
+.card {
+  gap: 16px;
+}
+
+.question {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: -0.3px;
+}
+
+.changeRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.state {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: var(--radius-tile);
+}
+
+.stateTime {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--color-muted-2);
+}
+
+.stateChoice {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.agree {
+  background: var(--color-agree-tint);
+}
+
+.agree .stateChoice {
+  color: var(--color-agree);
+}
+
+.disagree {
+  background: var(--color-disagree-tint);
+}
+
+.disagree .stateChoice {
+  color: var(--color-disagree);
+}
+
+.unsure {
+  background: var(--color-unsure-tint);
+}
+
+.unsure .stateChoice {
+  color: var(--color-muted);
+}
+
+.arrow {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.reason {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-line-soft);
+}
+
+.reasonTitle {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-muted);
+}
+
+.reasonBody {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-ink-2);
+}

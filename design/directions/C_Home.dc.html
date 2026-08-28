@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+  <style>
+    body { margin: 0; background: #fbf8f3; font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif; color: #24211d; }
+    a { color: #6d6a9c; } a:hover { color: #524f7c; }
+    .display { font-family: 'Gowun Dodum', 'Noto Sans KR', sans-serif; }
+  </style>
+</helmet>
+<div style="width: 390px; min-height: 900px; background: #fbf8f3; display: flex; flex-direction: column;">
+  <div style="display: flex; justify-content: space-between; align-items: center; padding: 56px 24px 10px 24px;">
+    <div class="display" style="font-size: 22px; font-weight: 700; color: #6d6a9c;">SIDE</div>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#24211d" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+  </div>
+
+  <div style="padding: 18px 24px 20px 24px; display: flex; flex-direction: column; gap: 10px;">
+    <div class="display" style="font-size: 28px; line-height: 1.3;">오늘은 어떤 질문에<br>생각이 갈릴까요?</div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <div style="display: flex;">
+        <div style="width: 26px; height: 26px; border-radius: 13px; background: #d9d2e9; border: 2px solid #fbf8f3;"></div>
+        <div style="width: 26px; height: 26px; border-radius: 13px; background: #cfe0d5; border: 2px solid #fbf8f3; margin-left: -8px;"></div>
+        <div style="width: 26px; height: 26px; border-radius: 13px; background: #ead9cf; border: 2px solid #fbf8f3; margin-left: -8px;"></div>
+        <div style="width: 26px; height: 26px; border-radius: 13px; background: #e6e2da; border: 2px solid #fbf8f3; margin-left: -8px;"></div>
+      </div>
+      <div style="font-size: 13px; color: #7a746b;">지금 32,840명이 의견을 나누고 있어요</div>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 8px; padding: 0 24px 16px 24px; overflow: hidden;">
+    <span style="font-size: 13px; font-weight: 500; padding: 8px 14px; border-radius: 999px; background: #24211d; color: #ffffff;">전체</span>
+    <span style="font-size: 13px; padding: 8px 14px; border-radius: 999px; background: #ffffff; border: 1px solid #ebe6dd; color: #4f4a43;">노동</span>
+    <span style="font-size: 13px; padding: 8px 14px; border-radius: 999px; background: #ffffff; border: 1px solid #ebe6dd; color: #4f4a43;">경제</span>
+    <span style="font-size: 13px; padding: 8px 14px; border-radius: 999px; background: #ffffff; border: 1px solid #ebe6dd; color: #4f4a43;">환경</span>
+    <span style="font-size: 13px; padding: 8px 14px; border-radius: 999px; background: #ffffff; border: 1px solid #ebe6dd; color: #4f4a43;">기술</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 14px; padding: 0 24px;">
+    <div style="background: #ffffff; border-radius: 26px; padding: 24px 22px; display: flex; flex-direction: column; gap: 18px; box-shadow: 0 8px 28px rgba(60, 50, 30, 0.06);">
+      <div style="display: flex; justify-content: space-between; align-items: center;"><div style="font-size: 12px; color: #7a746b;">노동 · 경제</div><div style="font-size: 12px; color: #7a746b;">12,481명</div></div>
+      <div class="display" style="font-size: 26px; line-height: 1.3; text-wrap: pretty;">주 4.5일제를<br>도입해야 할까?</div>
+      <div style="display: flex; gap: 8px;">
+        <div style="flex: 57; display: flex; flex-direction: column; gap: 6px; padding: 12px 12px; border-radius: 16px; background: #e4ede6;"><div style="font-size: 11px; color: #4f7a63;">찬성</div><div style="font-size: 18px; font-weight: 700; color: #4f7a63;">57%</div></div>
+        <div style="flex: 31; display: flex; flex-direction: column; gap: 6px; padding: 12px 12px; border-radius: 16px; background: #f1e4dc;"><div style="font-size: 11px; color: #a06b52;">반대</div><div style="font-size: 18px; font-weight: 700; color: #a06b52;">31%</div></div>
+        <div style="flex: 12; min-width: 56px; display: flex; flex-direction: column; gap: 6px; padding: 12px 10px; border-radius: 16px; background: #ecebe7;"><div style="font-size: 11px; color: #8b877f;">모름</div><div style="font-size: 18px; font-weight: 700; color: #8b877f;">12%</div></div>
+      </div>
+      <div style="display: flex; justify-content: center; align-items: center; height: 48px; border-radius: 16px; background: #24211d; color: #ffffff; font-size: 14px; font-weight: 500;">3분 만에 이해하기</div>
+    </div>
+
+    <div style="background: #ffffff; border-radius: 26px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 8px 28px rgba(60, 50, 30, 0.06);">
+      <div style="display: flex; justify-content: space-between; align-items: center;"><div style="font-size: 12px; color: #7a746b;">에너지 · 환경</div><div style="font-size: 12px; color: #7a746b;">8,902명</div></div>
+      <div class="display" style="font-size: 20px; line-height: 1.35;">원전 비중을 확대해야 할까?</div>
+      <div style="display: flex; height: 10px; gap: 4px;"><div style="width: 44%; border-radius: 6px; background: #b9d0c2;"></div><div style="width: 41%; border-radius: 6px; background: #e0c6b8;"></div><div style="width: 15%; border-radius: 6px; background: #ddd9d1;"></div></div>
+      <div style="font-size: 12px; color: #7a746b;">거의 반반으로 갈려요 · 찬성 44% 반대 41%</div>
+    </div>
+
+    <div style="background: #ffffff; border-radius: 26px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 8px 28px rgba(60, 50, 30, 0.06);">
+      <div style="display: flex; justify-content: space-between; align-items: center;"><div style="font-size: 12px; color: #7a746b;">노동 · 복지</div><div style="font-size: 12px; color: #7a746b;">6,317명</div></div>
+      <div class="display" style="font-size: 20px; line-height: 1.35;">정년을 65세까지 연장해야 할까?</div>
+      <div style="display: flex; height: 10px; gap: 4px;"><div style="width: 52%; border-radius: 6px; background: #b9d0c2;"></div><div style="width: 29%; border-radius: 6px; background: #e0c6b8;"></div><div style="width: 19%; border-radius: 6px; background: #ddd9d1;"></div></div>
+      <div style="font-size: 12px; color: #7a746b;">5명 중 1명은 아직 고민 중 · 모르겠음 19%</div>
+    </div>
+  </div>
+
+  <div style="margin-top: auto; margin: 24px 24px 22px 24px; display: flex; justify-content: space-around; align-items: center; height: 64px; border-radius: 22px; background: #ffffff; box-shadow: 0 8px 28px rgba(60, 50, 30, 0.08);">
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 3px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#24211d" stroke-width="1.8" stroke-linecap="round"><path d="M4 12a8 8 0 1 1 16 0 8 8 0 0 1-16 0z"></path><path d="M9 12h6M12 9v6"></path></svg><span style="font-size: 11px; font-weight: 600;">이슈</span></div>
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 3px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a49e94" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8"></circle><path d="M14.5 9.5l-1.5 4-4 1.5 1.5-4z"></path></svg><span style="font-size: 11px; color: #a49e94;">발견</span></div>
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 3px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a49e94" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="9" r="4"></circle><path d="M5 20c1.5-3.5 4-5 7-5s5.5 1.5 7 5"></path></svg><span style="font-size: 11px; color: #a49e94;">나</span></div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

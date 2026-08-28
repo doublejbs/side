@@ -1,0 +1,5 @@
+export enum MediaLeaning {
+  PROGRESSIVE = 'PROGRESSIVE',
+  CENTRIST = 'CENTRIST',
+  CONSERVATIVE = 'CONSERVATIVE',
+}

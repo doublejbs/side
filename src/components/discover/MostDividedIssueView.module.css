@@ -1,0 +1,15 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  gap: 14px;
+}
+
+.gap {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-muted);
+}

@@ -1,0 +1,29 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  gap: 14px;
+}
+
+.compareRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.overallLabel {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--color-muted);
+}
+
+.emptyDescription {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-muted);
+}

@@ -1,0 +1,32 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.fact {
+  background: var(--color-brand-tint);
+  color: var(--color-brand);
+}
+
+.research {
+  background: var(--color-agree-tint);
+  color: var(--color-agree);
+}
+
+.expert {
+  background: var(--color-unsure-tint);
+  color: var(--color-ink-2);
+}
+
+.claim {
+  background: var(--color-disagree-tint);
+  color: var(--color-disagree);
+}

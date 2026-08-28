@@ -1,0 +1,15 @@
+.page {
+  display: flex;
+  flex-direction: column;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 12px 20px 24px 20px;
+}
+
+.backLink {
+  align-self: center;
+}

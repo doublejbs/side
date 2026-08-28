@@ -1,0 +1,22 @@
+.bar {
+  display: flex;
+  gap: 3px;
+  width: 100%;
+}
+
+.segment {
+  border-radius: 6px;
+  min-width: 3px;
+}
+
+.agree {
+  background: var(--color-agree);
+}
+
+.disagree {
+  background: var(--color-disagree);
+}
+
+.unsure {
+  background: var(--color-unsure);
+}

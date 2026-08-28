@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=Noto+Sans+KR:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; background: #f7f5f0; font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif; color: #17161a; }
+    a { color: #17161a; } a:hover { color: #6b6860; }
+    .serif { font-family: 'Noto Serif KR', 'Apple Myungjo', serif; }
+  </style>
+</helmet>
+<div style="width: 390px; min-height: 1040px; background: #f7f5f0; display: flex; flex-direction: column;">
+  <div style="display: flex; align-items: center; gap: 14px; padding: 56px 24px 12px 20px;">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#17161a" stroke-width="1.5"><path d="M15 5l-7 7 7 7"></path></svg>
+    <div style="font-size: 11px; letter-spacing: 1.5px; color: #6b6860;">주 4.5일제 · 투표 결과</div>
+  </div>
+
+  <div style="padding: 24px 24px 30px 24px; display: flex; flex-direction: column; gap: 26px; border-bottom: 1px solid #17161a;">
+    <div class="serif" style="font-size: 26px; line-height: 1.35; font-weight: 700;"><span style="font-size: 34px;">12,481</span>명이<br>의견을 남겼어요</div>
+    <div style="display: flex; align-items: flex-end; justify-content: space-between;">
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div class="serif" style="font-size: 54px; line-height: 1; font-weight: 700;">57</div><div style="font-size: 12px; letter-spacing: 1px;">찬성 · 내 선택</div></div>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div class="serif" style="font-size: 54px; line-height: 1; font-weight: 400; color: #3a3833;">31</div><div style="font-size: 12px; letter-spacing: 1px; color: #6b6860;">반대</div></div>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div class="serif" style="font-size: 54px; line-height: 1; font-weight: 400; color: #9d998f;">12</div><div style="font-size: 12px; letter-spacing: 1px; color: #9d998f;">모르겠음</div></div>
+    </div>
+    <div style="display: flex; height: 6px; gap: 2px;">
+      <div style="width: 57%; background: #17161a;"></div>
+      <div style="width: 31%; background: #8f8b82;"></div>
+      <div style="width: 12%; background: #d9d5cc;"></div>
+    </div>
+  </div>
+
+  <div style="padding: 30px 24px 28px 24px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid #d9d5cc;">
+    <div class="serif" style="font-size: 22px; line-height: 1.4; font-weight: 600; text-wrap: pretty;">나와 다른 사람들은<br>왜 그렇게 생각할까요?</div>
+    <div style="font-size: 13px; color: #6b6860; line-height: 1.6;">반대 의견 3개와 근거 9개를 읽어볼 수 있어요.</div>
+    <div style="margin-top: 10px; display: flex; justify-content: center; align-items: center; height: 48px; border: 1px solid #17161a; font-size: 14px; font-weight: 500;">반대 의견 읽어보기</div>
+  </div>
+
+  <div style="padding: 30px 24px 40px 24px; display: flex; flex-direction: column; gap: 18px;">
+    <div style="font-size: 11px; letter-spacing: 2px; color: #6b6860;">비슷한 생각을 가진 사람들</div>
+    <div style="display: flex; flex-direction: column;">
+      <div style="display: flex; gap: 18px; padding: 16px 0; border-bottom: 1px solid #e6e2d9;">
+        <div class="serif" style="font-size: 22px; font-weight: 700; width: 52px; line-height: 1.2;">32<span style="font-size: 12px; font-weight: 400;">%</span></div>
+        <div style="display: flex; flex-direction: column; gap: 6px;"><div style="font-size: 11px; letter-spacing: 1.5px; color: #6b6860;">그룹 A · 나와 가장 가까움</div><div class="serif" style="font-size: 15px; line-height: 1.55;">노동시간 단축에는 찬성하지만<br>기업 규제에는 신중한 사람들</div></div>
+      </div>
+      <div style="display: flex; gap: 18px; padding: 16px 0; border-bottom: 1px solid #e6e2d9;">
+        <div class="serif" style="font-size: 22px; font-weight: 400; width: 52px; line-height: 1.2; color: #3a3833;">27<span style="font-size: 12px;">%</span></div>
+        <div style="display: flex; flex-direction: column; gap: 6px;"><div style="font-size: 11px; letter-spacing: 1.5px; color: #6b6860;">그룹 B</div><div class="serif" style="font-size: 15px; line-height: 1.55; color: #3a3833;">제도 취지에는 찬성하지만<br>중소기업 부담을 걱정하는 사람들</div></div>
+      </div>
+      <div style="display: flex; gap: 18px; padding: 16px 0;">
+        <div class="serif" style="font-size: 22px; font-weight: 400; width: 52px; line-height: 1.2; color: #3a3833;">24<span style="font-size: 12px;">%</span></div>
+        <div style="display: flex; flex-direction: column; gap: 6px;"><div style="font-size: 11px; letter-spacing: 1.5px; color: #6b6860;">그룹 C</div><div class="serif" style="font-size: 15px; line-height: 1.55; color: #3a3833;">정부 정책보다 기업 자율 결정을<br>선호하는 사람들</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,98 @@
+.card {
+  gap: 0;
+  padding: 0;
+  border-radius: var(--radius-tile);
+  overflow: hidden;
+}
+
+.summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  width: 100%;
+  min-height: 44px;
+  padding: 18px 20px;
+  text-align: left;
+}
+
+.share {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  min-width: 52px;
+}
+
+.shareValue {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.shareLabel {
+  font-size: 10px;
+  color: var(--color-muted);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.badge {
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-ink);
+  color: var(--color-surface);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.description {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-ink-2);
+  text-wrap: pretty;
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0 20px 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-line-soft);
+}
+
+.detail[hidden] {
+  display: none;
+}
+
+.detailSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detailTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.claimList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.claimTitle {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-ink-2);
+}
