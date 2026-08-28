@@ -1,0 +1,121 @@
+.card {
+  gap: 20px;
+  padding: 22px 20px;
+}
+
+.title {
+  display: flex;
+  flex-direction: column;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+}
+
+.titleLine {
+  display: block;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rowHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.labelText {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.badge {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--color-ink);
+  color: var(--color-surface);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.percent {
+  flex-shrink: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.percentAgree {
+  color: var(--color-agree);
+}
+
+.percentDisagree {
+  color: var(--color-disagree);
+}
+
+.percentUnsure {
+  color: var(--color-muted-2);
+}
+
+.track {
+  height: 12px;
+  border-radius: 6px;
+  background: var(--color-line-soft);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  transform-origin: left center;
+  animation: grow 400ms ease-out both;
+}
+
+.fillAgree {
+  background: var(--color-agree);
+}
+
+.fillDisagree {
+  background: var(--color-disagree);
+}
+
+.fillUnsure {
+  background: var(--color-unsure);
+}
+
+@keyframes grow {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fill {
+    animation: none;
+  }
+}

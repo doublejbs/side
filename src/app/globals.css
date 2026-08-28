@@ -1,0 +1,81 @@
+:root {
+  --color-bg: #f4f5f7;
+  --color-surface: #ffffff;
+  --color-line: #e6e7eb;
+  --color-line-soft: #eef0f4;
+  --color-ink: #111318;
+  --color-ink-2: #2a2d36;
+  --color-muted: #6c7080;
+  --color-muted-2: #8a8f9e;
+  --color-brand: #3f4f7a;
+  --color-brand-strong: #2c3858;
+  --color-brand-tint: #eaecf3;
+  --color-agree: #4b7c6f;
+  --color-agree-tint: #eaf1ee;
+  --color-disagree: #a0674d;
+  --color-disagree-tint: #f3ebe6;
+  --color-unsure: #b8bcc6;
+  --color-unsure-tint: #eef0f4;
+
+  --radius-card: 20px;
+  --radius-tile: 14px;
+  --radius-control: 12px;
+  --radius-pill: 999px;
+
+  --content-max-width: 480px;
+  --tab-bar-height: 62px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  height: 100%;
+  color-scheme: light;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100%;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-plex-sans-kr), 'Apple SD Gothic Neo', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  letter-spacing: -0.2px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--color-brand);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--color-brand-strong);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}

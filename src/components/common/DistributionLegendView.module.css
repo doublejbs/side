@@ -1,0 +1,27 @@
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--color-muted);
+}
+
+.item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.coloredAgree {
+  color: var(--color-agree);
+}
+
+.coloredDisagree {
+  color: var(--color-disagree);
+}
+
+.coloredUnsure {
+  color: var(--color-muted-2);
+}

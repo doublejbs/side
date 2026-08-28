@@ -1,0 +1,11 @@
+.page {
+  display: flex;
+  flex-direction: column;
+}
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 16px 20px 40px 20px;
+}

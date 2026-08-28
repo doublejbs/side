@@ -1,0 +1,14 @@
+.questionHeading {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: -0.3px;
+}
+
+.question {
+  color: var(--color-ink);
+}
+
+.question:hover {
+  color: var(--color-brand);
+}

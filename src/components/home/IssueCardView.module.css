@@ -1,0 +1,90 @@
+.link {
+  display: block;
+  color: inherit;
+}
+
+.link:hover {
+  color: inherit;
+}
+
+.card {
+  transition: border-color 150ms ease;
+}
+
+.link:hover .card,
+.link:focus-visible .card {
+  border-color: var(--color-muted-2);
+}
+
+.featured {
+  gap: 16px;
+  padding: 22px 20px;
+}
+
+.compact {
+  gap: 12px;
+  padding: 18px 20px;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.participantCompact {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--color-muted-2);
+}
+
+.questionFeatured {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+  text-wrap: pretty;
+}
+
+.questionCompact {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.3px;
+  text-wrap: pretty;
+}
+
+.distribution {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.participantFeatured {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.participantValue {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.cta {
+  flex-shrink: 0;
+}

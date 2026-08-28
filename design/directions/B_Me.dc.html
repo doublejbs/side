@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+  <style>
+    body { margin: 0; background: #f4f5f7; font-family: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', sans-serif; color: #111318; }
+    a { color: #3f4f7a; } a:hover { color: #2c3858; }
+  </style>
+</helmet>
+<div style="width: 390px; min-height: 1200px; background: #f4f5f7; display: flex; flex-direction: column;">
+  <div style="display: flex; justify-content: space-between; align-items: center; padding: 56px 20px 12px 20px;">
+    <div style="font-size: 20px; font-weight: 700; letter-spacing: 1px;">SIDE</div>
+    <div style="width: 40px; height: 40px; border-radius: 12px; background: #ffffff; border: 1px solid #e6e7eb; display: flex; align-items: center; justify-content: center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#111318" stroke-width="1.8"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg></div>
+  </div>
+
+  <div style="padding: 16px 20px 0 20px; display: flex; flex-direction: column; gap: 14px;">
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-size: 26px; font-weight: 700; letter-spacing: -0.5px;">나의 정치 관점</div>
+      <div style="font-size: 13px; color: #6c7080; line-height: 1.5;">18개 이슈에서 내가 선택한 패턴이에요. 성향 라벨이 아니라 기록입니다.</div>
+    </div>
+
+    <div style="background: #ffffff; border: 1px solid #e6e7eb; border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 22px;">
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #6c7080;"><span>시장 중심</span><span style="font-weight: 600; color: #111318;">경제</span><span>정부 역할</span></div>
+        <div style="position: relative; height: 6px; border-radius: 3px; background: #eef0f4;"><div style="position: absolute; left: 62%; top: -5px; width: 16px; height: 16px; border-radius: 8px; background: #3f4f7a; border: 3px solid #ffffff; box-shadow: 0 0 0 1px #e6e7eb;"></div></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #6c7080;"><span>개인 책임</span><span style="font-weight: 600; color: #111318;">복지</span><span>사회 책임</span></div>
+        <div style="position: relative; height: 6px; border-radius: 3px; background: #eef0f4;"><div style="position: absolute; left: 28%; top: -5px; width: 16px; height: 16px; border-radius: 8px; background: #3f4f7a; border: 3px solid #ffffff; box-shadow: 0 0 0 1px #e6e7eb;"></div></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #6c7080;"><span>기업 중심</span><span style="font-weight: 600; color: #111318;">노동</span><span>노동자 중심</span></div>
+        <div style="position: relative; height: 6px; border-radius: 3px; background: #eef0f4;"><div style="position: absolute; left: 70%; top: -5px; width: 16px; height: 16px; border-radius: 8px; background: #3f4f7a; border: 3px solid #ffffff; box-shadow: 0 0 0 1px #e6e7eb;"></div></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #6c7080;"><span>성장</span><span style="font-weight: 600; color: #111318;">환경</span><span>환경</span></div>
+        <div style="position: relative; height: 6px; border-radius: 3px; background: #eef0f4;"><div style="position: absolute; left: 34%; top: -5px; width: 16px; height: 16px; border-radius: 8px; background: #3f4f7a; border: 3px solid #ffffff; box-shadow: 0 0 0 1px #e6e7eb;"></div></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #6c7080;"><span>현실주의</span><span style="font-weight: 600; color: #111318;">외교</span><span>이상주의</span></div>
+        <div style="position: relative; height: 6px; border-radius: 3px; background: #eef0f4;"><div style="position: absolute; left: 58%; top: -5px; width: 16px; height: 16px; border-radius: 8px; background: #3f4f7a; border: 3px solid #ffffff; box-shadow: 0 0 0 1px #e6e7eb;"></div></div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px; padding-top: 14px;">
+      <div style="font-size: 18px; font-weight: 700; letter-spacing: -0.3px;">내 생각이 바뀐 이슈</div>
+      <div style="background: #ffffff; border: 1px solid #e6e7eb; border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+        <div style="font-size: 16px; font-weight: 600;">원전 비중을 확대해야 할까?</div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 14px; background: #f3ebe6;"><div style="font-size: 11px; color: #8a8f9e;">3개월 전</div><div style="font-size: 15px; font-weight: 700; color: #a0674d;">반대</div></div>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8a8f9e" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 14px; background: #eaf1ee;"><div style="font-size: 11px; color: #8a8f9e;">현재</div><div style="font-size: 15px; font-weight: 700; color: #4b7c6f;">찬성</div></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid #eef0f4;">
+          <div style="font-size: 12px; font-weight: 600; color: #6c7080;">무엇이 생각을 바꿨나요?</div>
+          <div style="font-size: 13px; line-height: 1.55; color: #2a2d36;">내가 "설득됐어요"라고 평가한 주장 — 전력 수요 증가와 안정적인 전력 공급에 관한 근거</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px; padding-top: 14px; padding-bottom: 110px;">
+      <div style="font-size: 18px; font-weight: 700; letter-spacing: -0.3px;">나의 참여</div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;">
+        <div style="background: #ffffff; border: 1px solid #e6e7eb; border-radius: 14px; padding: 14px 12px; display: flex; flex-direction: column; gap: 2px;"><div style="font-size: 20px; font-weight: 700;">18</div><div style="font-size: 11px; color: #6c7080;">투표한 이슈</div></div>
+        <div style="background: #ffffff; border: 1px solid #e6e7eb; border-radius: 14px; padding: 14px 12px; display: flex; flex-direction: column; gap: 2px;"><div style="font-size: 20px; font-weight: 700;">42</div><div style="font-size: 11px; color: #6c7080;">읽은 근거</div></div>
+        <div style="background: #ffffff; border: 1px solid #e6e7eb; border-radius: 14px; padding: 14px 12px; display: flex; flex-direction: column; gap: 2px;"><div style="font-size: 20px; font-weight: 700;">3</div><div style="font-size: 11px; color: #6c7080;">바뀐 생각</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="position: sticky; bottom: 0; margin-top: auto; display: flex; justify-content: space-around; padding: 12px 0 26px 0; background: #ffffff; border-top: 1px solid #e6e7eb;">
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; width: 72px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9a9eab" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 10h8M8 14h5"></path></svg><span style="font-size: 11px; color: #9a9eab;">이슈</span></div>
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; width: 72px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9a9eab" stroke-width="1.8"><circle cx="12" cy="12" r="8"></circle><path d="M14.5 9.5l-1.5 4-4 1.5 1.5-4z"></path></svg><span style="font-size: 11px; color: #9a9eab;">발견</span></div>
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; width: 72px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111318" stroke-width="1.8"><circle cx="12" cy="9" r="4"></circle><path d="M5 20c1.5-3.5 4-5 7-5s5.5 1.5 7 5"></path></svg><span style="font-size: 11px; font-weight: 600;">나</span></div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

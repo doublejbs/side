@@ -1,0 +1,7 @@
+export enum PerspectiveAxis {
+  ECONOMY = 'ECONOMY',
+  WELFARE = 'WELFARE',
+  LABOR = 'LABOR',
+  ENVIRONMENT = 'ENVIRONMENT',
+  DIPLOMACY = 'DIPLOMACY',
+}

@@ -1,0 +1,27 @@
+{
+  "pages": [
+    { "id": "page-1", "name": "MVP (B · Modern Data)" },
+    { "id": "page-2", "name": "방향 스케치 (A / C)" }
+  ],
+  "artboards": [
+    { "file": "Main.dc.html",        "title": "01 · 홈",                "x": 0,    "y": 0, "w": 390, "h": 900,  "page": "page-1" },
+    { "file": "B_Detail.dc.html",    "title": "02 · 이슈 상세 / 30초 요약", "x": 480,  "y": 0, "w": 390, "h": 1200, "page": "page-1" },
+    { "file": "B_Arguments.dc.html", "title": "03 · 찬성 vs 반대 주장",   "x": 960,  "y": 0, "w": 390, "h": 1240, "page": "page-1" },
+    { "file": "B_Media.dc.html",     "title": "04 · 언론 관점 비교",      "x": 1440, "y": 0, "w": 390, "h": 1180, "page": "page-1" },
+    { "file": "B_Result.dc.html",    "title": "05 · 투표 결과 + 의견 그룹", "x": 1920, "y": 0, "w": 390, "h": 1080, "page": "page-1" },
+    { "file": "B_Me.dc.html",        "title": "06 · 나의 정치 관점 / 의견 변화", "x": 2400, "y": 0, "w": 390, "h": 1200, "page": "page-1" },
+
+    { "file": "A_Home.dc.html",   "title": "A · 홈",        "x": 0,   "y": 0,    "w": 390, "h": 900,  "page": "page-2" },
+    { "file": "A_Detail.dc.html", "title": "A · 이슈 상세", "x": 480, "y": 0,    "w": 390, "h": 1180, "page": "page-2" },
+    { "file": "A_Result.dc.html", "title": "A · 투표 결과", "x": 960, "y": 0,    "w": 390, "h": 1040, "page": "page-2" },
+    { "file": "C_Home.dc.html",   "title": "C · 홈",        "x": 0,   "y": 1360, "w": 390, "h": 900,  "page": "page-2" },
+    { "file": "C_Detail.dc.html", "title": "C · 이슈 상세", "x": 480, "y": 1360, "w": 390, "h": 1200, "page": "page-2" },
+    { "file": "C_Result.dc.html", "title": "C · 투표 결과", "x": 960, "y": 1360, "w": 390, "h": 1080, "page": "page-2" }
+  ],
+  "annotations": [
+    { "id": "mvp-guide", "x": -320, "y": 0, "w": 280, "page": "page-1", "text": "SIDE MVP · Direction B (Modern Data)\n\n브리프 28장의 6화면. 왼쪽부터 사용 흐름 순서.\n\n토큰\n배경 #f4f5f7 · 카드 #ffffff / 1px #e6e7eb / r20\n텍스트 #111318 · 보조 #6c7080\n브랜드 #3f4f7a\n찬성 #4b7c6f · 반대 #a0674d · 모름 #b8bcc6\n서체 IBM Plex Sans KR\n\n찬성/반대 카드는 같은 최소 높이(172px)·같은 서체 크기·같은 칩 구조를 사용합니다." },
+    { "id": "dir-a", "x": -300, "y": 0,    "w": 260, "page": "page-2", "text": "Direction A — Editorial Minimal (미채택)\n세리프 헤드라인, 헤어라인, 무채색 분포 바." },
+    { "id": "dir-c", "x": -300, "y": 1360, "w": 260, "page": "page-2", "text": "Direction C — Calm Social (미채택)\n따뜻한 배경, 라운드 카드, 추상 아바타, 찬반 2열 병치." }
+  ],
+  "launch": { "view": "canvas", "page": "page-1" }
+}

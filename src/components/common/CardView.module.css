@@ -1,0 +1,18 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  padding: 20px;
+}
+
+.brand {
+  background: var(--color-brand);
+  border-color: transparent;
+}
+
+.highlighted {
+  border-width: 1.5px;
+  border-color: var(--color-ink);
+}

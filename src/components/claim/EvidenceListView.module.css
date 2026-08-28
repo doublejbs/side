@@ -1,0 +1,41 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  gap: 10px;
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.source {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-muted);
+  text-align: right;
+}
+
+.summary {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-ink-2);
+  text-wrap: pretty;
+}
+
+.link {
+  align-self: flex-start;
+}

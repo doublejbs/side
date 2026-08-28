@@ -1,0 +1,45 @@
+.axes {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.axis {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-muted);
+}
+
+.axisName {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.track {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-line-soft);
+}
+
+.marker {
+  position: absolute;
+  top: -5px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-brand);
+  border: 3px solid var(--color-surface);
+  box-shadow: 0 0 0 1px var(--color-line);
+  transform: translateX(-50%);
+}

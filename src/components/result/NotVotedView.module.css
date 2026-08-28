@@ -1,0 +1,21 @@
+.card {
+  gap: 10px;
+  padding: 22px 20px;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.3px;
+}
+
+.description {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-muted);
+}
+
+.action {
+  align-self: flex-start;
+}

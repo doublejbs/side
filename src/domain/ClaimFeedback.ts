@@ -1,0 +1,5 @@
+export enum ClaimFeedback {
+  PERSUADED = 'PERSUADED',
+  NOT_PERSUADED = 'NOT_PERSUADED',
+  LACKS_EVIDENCE = 'LACKS_EVIDENCE',
+}
