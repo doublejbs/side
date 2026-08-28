@@ -45,3 +45,4 @@ next-env.d.ts
 
 # 디자인 캔버스 빌드 산출물(아티팩트로 배포됨)
 /design/directions/side-design-directions.html
+!.env.example

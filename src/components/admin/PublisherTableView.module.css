@@ -1,0 +1,57 @@
+.table {
+  display: flex;
+  flex-direction: column;
+}
+
+.headRow,
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 130px auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-line-soft);
+}
+
+.headRow {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.domain {
+  font-size: 13px;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.input {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.input:focus {
+  outline: 2px solid var(--color-brand-tint);
+  border-color: var(--color-brand);
+}
+
+.actions {
+  display: flex;
+  gap: 6px;
+}
+
+.empty {
+  padding: 16px 0;
+  font-size: 13px;
+  color: var(--color-muted);
+}

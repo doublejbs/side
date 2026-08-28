@@ -1,0 +1,12 @@
+.form {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 150px auto;
+  align-items: end;
+  gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

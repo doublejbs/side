@@ -55,8 +55,10 @@ const notifyChange = (): void => {
   listeners.forEach((listener) => listener());
 };
 
+const WATCHED_KEYS: string[] = [VOTE_STORAGE_KEY, CLAIM_FEEDBACK_STORAGE_KEY];
+
 const handleStorageChange = (event: StorageEvent): void => {
-  if (event.key === null || event.key === VOTE_STORAGE_KEY || event.key === CLAIM_FEEDBACK_STORAGE_KEY) {
+  if (event.key === null || WATCHED_KEYS.includes(event.key)) {
     notifyChange();
   }
 };

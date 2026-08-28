@@ -16,7 +16,7 @@ export const MostDividedIssueView = ({ issue }: Props) => (
   <section className={styles.section}>
     <SectionTitleView>의외로 의견이 갈리는 이슈</SectionTitleView>
     <CardView as={CardElement.ARTICLE} className={styles.card}>
-      <IssueQuestionLinkView issueId={issue.id} question={issue.question} />
+      <IssueQuestionLinkView issueId={issue.slug} question={issue.question} />
       <DistributionBarView distribution={issue.distribution} />
       <p className={styles.gap}>
         {`찬성 ${issue.distribution.agree}% · 반대 ${issue.distribution.disagree}% — 단 ${getAgreeDisagreeGap(issue)}%p 차이`}

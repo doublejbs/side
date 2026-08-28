@@ -5,6 +5,7 @@ import type { Issue } from '@/domain/Issue';
 
 export const retirementAgeIssue: Issue = {
   id: 'retirement-65',
+  slug: 'retirement-65',
   question: '정년을 65세로 연장해야 할까?',
   tags: ['노동', '복지'],
   participantCount: 6317,

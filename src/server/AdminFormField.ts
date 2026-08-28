@@ -1,0 +1,21 @@
+/** 관리자 폼의 고정 필드 이름. 서버 액션과 뷰가 같은 값을 쓰도록 한곳에 모은다. */
+export enum AdminFormField {
+  ISSUE_ID = 'issueId',
+  QUESTION = 'question',
+  TAGS = 'tags',
+  SUMMARY = 'summary',
+  COMMON_COVERAGE = 'commonCoverage',
+  REVIEW_NOTE = 'reviewNote',
+  CLAIM_IDS = 'claimIds',
+  CLAIM_ID = 'claimId',
+  EVIDENCE_ID = 'evidenceId',
+  KEYWORD = 'keyword',
+  QUERY_ID = 'queryId',
+  IS_ACTIVE = 'isActive',
+  PUBLISHER_ID = 'publisherId',
+  DOMAIN = 'domain',
+  NAME = 'name',
+  LEANING = 'leaning',
+  PASSWORD = 'password',
+  NEXT = 'next',
+}

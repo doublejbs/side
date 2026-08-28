@@ -1,6 +1,7 @@
 import { ArrowLinkView } from '@/components/common/ArrowLinkView';
 import { CardElement } from '@/components/common/CardElement';
 import { CardView } from '@/components/common/CardView';
+import { SaveErrorView } from '@/components/common/SaveErrorView';
 import { CheckIcon } from '@/components/common/icons/CheckIcon';
 import { VoteChoice } from '@/domain/VoteChoice';
 import { getVoteChoiceLabel } from '@/domain/voteChoiceLabel';
@@ -12,6 +13,8 @@ interface Props {
   selectedChoice: VoteChoice | null;
   onVote: (choice: VoteChoice) => void;
   isLoaded: boolean;
+  /** 서버 저장에 실패했는지. 실패해도 내 선택은 로컬에 남는다. */
+  hasSaveError?: boolean;
 }
 
 /** 찬성 · 아직 모르겠어요 · 반대를 항상 같은 크기로 같은 순서에 배치한다. */
@@ -23,7 +26,13 @@ const SELECTED_CLASS: Record<VoteChoice, string> = {
   [VoteChoice.DISAGREE]: styles.selectedDisagree,
 };
 
-export const VotePanelView = ({ issueId, selectedChoice, onVote, isLoaded }: Props) => (
+export const VotePanelView = ({
+  issueId,
+  selectedChoice,
+  onVote,
+  isLoaded,
+  hasSaveError = false,
+}: Props) => (
   <CardView as={CardElement.SECTION} id="vote" className={styles.card}>
     <h2 className={styles.title}>지금 당신의 생각은?</h2>
     <p className={styles.subtitle}>
@@ -56,6 +65,8 @@ export const VotePanelView = ({ issueId, selectedChoice, onVote, isLoaded }: Pro
         );
       })}
     </div>
+
+    {hasSaveError ? <SaveErrorView /> : null}
 
     {selectedChoice ? (
       <ArrowLinkView className={styles.resultLink} href={`/issues/${issueId}/result`}>

@@ -1,0 +1,19 @@
+.root {
+  width: 100vw;
+  max-width: 100vw;
+  min-height: 100dvh;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  margin-bottom: calc(-1 * (var(--tab-bar-height) + env(safe-area-inset-bottom, 0px)));
+  background: var(--color-bg);
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+}

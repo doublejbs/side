@@ -3,12 +3,19 @@ import { HeaderActionButtonView } from '@/components/common/HeaderActionButtonVi
 import { PageHeroView } from '@/components/common/PageHeroView';
 import { SearchIcon } from '@/components/common/icons/SearchIcon';
 import { IssueListView } from '@/components/home/IssueListView';
-import { getIssues } from '@/data/IssueRepository';
+import { getIssueRepository } from '@/data/getIssueRepository';
 
 import styles from './page.module.css';
 
-const HomePage = () => {
-  const issues = getIssues();
+/**
+ * 공개 화면은 정적으로 미리 만들고 60초마다 다시 만든다(ISR).
+ * 검수에서 승인·반려한 결과는 `AdminActions` 의 `revalidatePath` 가 바로 반영한다.
+ * 근거: `docs/PipelineSpec.md` 6장.
+ */
+export const revalidate = 60;
+
+const HomePage = async () => {
+  const issues = await getIssueRepository().listPublishedIssues();
 
   return (
     <main className={styles.page}>

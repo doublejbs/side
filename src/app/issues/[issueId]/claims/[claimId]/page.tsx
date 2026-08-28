@@ -6,23 +6,34 @@ import { ClaimHeaderView } from '@/components/claim/ClaimHeaderView';
 import { EvidenceListView } from '@/components/claim/EvidenceListView';
 import { ArrowLinkView } from '@/components/common/ArrowLinkView';
 import { BackHeaderView } from '@/components/common/BackHeaderView';
-import { getClaimById, getIssueById, getIssues } from '@/data/IssueRepository';
+import { getIssueRepository } from '@/data/getIssueRepository';
 import { getClaimSideAnchor } from '@/domain/claimSidePresenter';
+import { isServerVoteEnabled } from '@/server/isServerVoteEnabled';
 
 import styles from './page.module.css';
 
+/**
+ * 공개 화면은 정적으로 미리 만들고 60초마다 다시 만든다(ISR).
+ * 검수에서 승인·반려한 결과는 `AdminActions` 의 `revalidatePath` 가 바로 반영한다.
+ * 근거: `docs/PipelineSpec.md` 6장.
+ */
+export const revalidate = 60;
+
+/** 라우트 파라미터 이름은 `issueId` 지만 값은 이슈의 `slug`(URL 식별자)다. */
 interface Props {
   params: Promise<{ issueId: string; claimId: string }>;
 }
 
-export const generateStaticParams = (): { issueId: string; claimId: string }[] =>
-  getIssues().flatMap((issue) =>
-    issue.claims.map((claim) => ({ issueId: issue.id, claimId: claim.id })),
-  );
+/** DB 모드에서 연결에 실패하면 빈 배열이 되고, 경로는 요청 시 렌더된다(dynamicParams 기본값 true). */
+export const generateStaticParams = async (): Promise<{ issueId: string; claimId: string }[]> => {
+  const params = await getIssueRepository().listClaimParams();
+
+  return params.map(({ slug, claimId }) => ({ issueId: slug, claimId }));
+};
 
 export const generateMetadata = async ({ params }: Props): Promise<Metadata> => {
   const { issueId, claimId } = await params;
-  const claim = getClaimById(issueId, claimId);
+  const claim = await getIssueRepository().getClaimById(issueId, claimId);
 
   if (!claim) {
     return { title: 'SIDE' };
@@ -33,8 +44,9 @@ export const generateMetadata = async ({ params }: Props): Promise<Metadata> => 
 
 const ClaimEvidencePage = async ({ params }: Props) => {
   const { issueId, claimId } = await params;
-  const issue = getIssueById(issueId);
-  const claim = getClaimById(issueId, claimId);
+  const repository = getIssueRepository();
+  const issue = await repository.getIssueBySlug(issueId);
+  const claim = await repository.getClaimById(issueId, claimId);
 
   if (!issue || !claim) {
     notFound();
@@ -49,11 +61,11 @@ const ClaimEvidencePage = async ({ params }: Props) => {
 
         <EvidenceListView evidences={claim.evidences} />
 
-        <ClaimFeedbackContainer claimId={claim.id} />
+        <ClaimFeedbackContainer claimId={claim.id} isServerEnabled={isServerVoteEnabled()} />
 
         <ArrowLinkView
           className={styles.backLink}
-          href={`/issues/${issue.id}#${getClaimSideAnchor(claim.side)}`}
+          href={`/issues/${issue.slug}#${getClaimSideAnchor(claim.side)}`}
         >
           이슈로 돌아가기
         </ArrowLinkView>

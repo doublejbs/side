@@ -15,7 +15,7 @@ interface Props {
 export const MostDifferentIssueContainer = ({ candidates }: Props) => {
   const votes = useUserVotes();
   const issue = useMemo(() => pickMostDifferentIssue(candidates, votes), [candidates, votes]);
-  const myChoice = issue ? votes[issue.id]?.choice ?? null : null;
+  const myChoice = issue ? votes[issue.slug]?.choice ?? null : null;
 
   return <MostDifferentIssueView issue={issue} myChoice={myChoice} />;
 };

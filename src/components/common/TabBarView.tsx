@@ -23,6 +23,12 @@ const TAB_ITEMS: TabItem[] = [
   { href: '/me', label: '나', Icon: PersonIcon },
 ];
 
+/** 관리자 화면(`/admin/**`)은 앱 하단 탭바를 사용하지 않는다. */
+const HIDDEN_PATH_PREFIX = '/admin';
+
+const isHiddenPath = (pathname: string): boolean =>
+  pathname === HIDDEN_PATH_PREFIX || pathname.startsWith(`${HIDDEN_PATH_PREFIX}/`);
+
 const isActiveTab = (pathname: string, href: string): boolean => {
   if (href === '/') {
     return pathname === '/' || pathname.startsWith('/issues');
@@ -33,6 +39,10 @@ const isActiveTab = (pathname: string, href: string): boolean => {
 
 export const TabBarView = () => {
   const pathname = usePathname() ?? '/';
+
+  if (isHiddenPath(pathname)) {
+    return null;
+  }
 
   return (
     <nav className={styles.tabBar} aria-label="주요 메뉴">

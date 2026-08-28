@@ -2,11 +2,11 @@ import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { EvidenceListView } from '@/components/claim/EvidenceListView';
-import { getClaimById } from '@/data/IssueRepository';
+import { MockIssueRepository } from '@/data/MockIssueRepository';
 import { EvidenceType } from '@/domain/EvidenceType';
 import type { Evidence } from '@/domain/Issue';
 
-const claim = getClaimById('work-week-4-5', 'work-week-agree-1');
+const claim = await new MockIssueRepository().getClaimById('work-week-4-5', 'work-week-agree-1');
 
 if (!claim) {
   throw new Error('테스트에 사용할 주장 목 데이터를 찾을 수 없습니다.');

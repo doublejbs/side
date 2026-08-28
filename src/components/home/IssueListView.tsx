@@ -10,7 +10,7 @@ interface Props {
 export const IssueListView = ({ issues }: Props) => (
   <div className={styles.list}>
     {issues.map((issue, index) => (
-      <IssueCardView key={issue.id} issue={issue} featured={index === 0} />
+      <IssueCardView key={issue.slug} issue={issue} featured={index === 0} />
     ))}
   </div>
 );

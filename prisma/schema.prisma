@@ -1,0 +1,185 @@
+// SIDE 실데이터 파이프라인 스키마. 근거: docs/PipelineSpec.md 3장·5장.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum IssueStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  REJECTED
+}
+
+enum ClaimSide {
+  AGREE
+  DISAGREE
+}
+
+enum EvidenceType {
+  FACT
+  RESEARCH
+  EXPERT
+  CLAIM
+}
+
+enum MediaLeaning {
+  PROGRESSIVE
+  CENTRIST
+  CONSERVATIVE
+}
+
+enum VoteChoice {
+  AGREE
+  DISAGREE
+  UNSURE
+}
+
+enum ClaimFeedback {
+  PERSUADED
+  NOT_PERSUADED
+  LACKS_EVIDENCE
+}
+
+/// 수집 키워드 (관리자 편집)
+model SearchQuery {
+  id        String   @id @default(cuid())
+  keyword   String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+/// 매체 도메인 → 매체명 · 성향. 성향은 관리자가 /admin/publishers 에서 지정한다.
+model Publisher {
+  id      String        @id @default(cuid())
+  domain  String        @unique
+  name    String
+  leaning MediaLeaning?
+}
+
+model Article {
+  id           String   @id @default(cuid())
+  /// 네이버 링크 (중복 제거 키)
+  naverLink    String   @unique
+  originalLink String
+  /// HTML 태그·엔티티 제거 후
+  title        String
+  description  String
+  /// originalLink 도메인 → 매체명 매핑, 없으면 도메인
+  publisher    String?
+  publishedAt  DateTime
+  collectedAt  DateTime @default(now())
+  /// 1536차원, pgvector 미사용(단순 배열)
+  embedding    Float[]
+  issueId      String?
+  issue        Issue?   @relation(fields: [issueId], references: [id])
+
+  evidences Evidence[]
+
+  @@index([issueId])
+  @@index([publishedAt])
+}
+
+model Issue {
+  id                String      @id @default(cuid())
+  status            IssueStatus @default(DRAFT)
+  /// PUBLISHED 시 부여 (URL)
+  slug              String?     @unique
+  /// 질문형 제목
+  question          String
+  tags              String[]
+  /// 3~5문장
+  summary           String[]
+  /// KeyPoint[] {id,title,question}
+  keyPoints         Json
+  commonCoverage    String[]
+  /// MediaPerspective[] (leaning, articleCount, frame, keywords, representativeArticle)
+  mediaPerspectives Json
+  /// OpinionGroup[] — 파이프라인이 초안 생성, 검수에서 수정
+  opinionGroups     Json
+  /// 클러스터 중심 임베딩
+  centroid          Float[]
+
+  articles Article[]
+  claims   Claim[]
+  votes    Vote[]
+
+  reviewNote String?
+  /// 마지막으로 요약(4.3)을 성공한 시각. 없으면 아직 요약된 적이 없다.
+  summarizedAt DateTime?
+  /// 마지막 요약 시점의 기사 수. 재요약 판단의 분모다.
+  summarizedArticleCount Int @default(0)
+
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status])
+}
+
+model Claim {
+  id          String    @id @default(cuid())
+  issueId     String
+  issue       Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  side        ClaimSide
+  order       Int
+  title       String
+  description String
+
+  evidences Evidence[]
+  feedbacks ClaimFeedbackRecord[]
+}
+
+model Evidence {
+  id      String       @id @default(cuid())
+  claimId String
+  claim   Claim        @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  type    EvidenceType
+  source  String
+  date    DateTime
+  summary String
+  url     String
+
+  articleId String?
+  article   Article? @relation(fields: [articleId], references: [id])
+}
+
+model Vote {
+  id        String     @id @default(cuid())
+  issueId   String
+  issue     Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  anonId    String
+  choice    VoteChoice
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  /// 1인 1표, 변경 가능
+  @@unique([issueId, anonId])
+}
+
+model ClaimFeedbackRecord {
+  id        String        @id @default(cuid())
+  claimId   String
+  claim     Claim         @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  anonId    String
+  feedback  ClaimFeedback
+  createdAt DateTime      @default(now())
+
+  @@unique([claimId, anonId])
+}
+
+/// 실행 이력·관측
+model PipelineRun {
+  id         String    @id @default(cuid())
+  step       String
+  /// RUNNING | SUCCESS | FAILED
+  status     String
+  detail     Json?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+}

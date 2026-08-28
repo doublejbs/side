@@ -1,11 +1,13 @@
 import type { VoteDistribution } from '@/domain/Issue';
 import { VoteChoice } from '@/domain/VoteChoice';
+import { getVoteChoiceKey } from '@/domain/voteChoiceKey';
 
 interface DistributionAfterVote {
   distribution: VoteDistribution;
   participantCount: number;
 }
 
+/** 선택지별 표 수. 실제 투표 집계(`voteAggregation.ts`)와 목 분포 복원이 함께 쓴다. */
 interface CountBucket {
   key: keyof VoteDistribution;
   count: number;
@@ -16,12 +18,6 @@ interface RawBucket {
   floor: number;
   remainder: number;
 }
-
-const CHOICE_KEY: Record<VoteChoice, keyof VoteDistribution> = {
-  [VoteChoice.AGREE]: 'agree',
-  [VoteChoice.DISAGREE]: 'disagree',
-  [VoteChoice.UNSURE]: 'unsure',
-};
 
 const DISTRIBUTION_KEYS: (keyof VoteDistribution)[] = ['agree', 'disagree', 'unsure'];
 
@@ -66,7 +62,7 @@ const restoreCounts = (
 };
 
 /** 가장 큰 나머지 방식으로 퍼센트 합이 정확히 100이 되도록 계산한다. */
-const toPercentages = (buckets: CountBucket[], total: number): VoteDistribution => {
+export const toPercentages = (buckets: CountBucket[], total: number): VoteDistribution => {
   if (total <= 0) {
     return { agree: 0, disagree: 0, unsure: 0 };
   }
@@ -87,7 +83,7 @@ export const computeDistributionAfterVote = (
   participantCount: number,
   choice: VoteChoice,
 ): DistributionAfterVote => {
-  const chosenKey = CHOICE_KEY[choice];
+  const chosenKey = getVoteChoiceKey(choice);
   const buckets = restoreCounts(base, participantCount).map((bucket) =>
     bucket.key === chosenKey ? { ...bucket, count: bucket.count + 1 } : bucket,
   );

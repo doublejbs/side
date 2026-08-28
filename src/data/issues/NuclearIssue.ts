@@ -5,6 +5,7 @@ import type { Issue } from '@/domain/Issue';
 
 export const nuclearIssue: Issue = {
   id: 'nuclear-expansion',
+  slug: 'nuclear-expansion',
   question: '원전 비중을 확대해야 할까?',
   tags: ['에너지', '환경'],
   participantCount: 8902,
