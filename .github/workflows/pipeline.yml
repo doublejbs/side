@@ -1,0 +1,94 @@
+name: 뉴스 파이프라인
+
+on:
+  schedule:
+    # KST 09:00 = UTC 00:00
+    - cron: '0 0 * * *'
+    # KST 18:00 = UTC 09:00
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      step:
+        description: '실행 단계'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - collect
+          - cluster
+          - classify
+          - summarize
+          - extract
+          - verify
+          - link
+      dry_run:
+        description: '드라이런 (외부 호출 없음)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: news-pipeline
+  cancel-in-progress: false
+
+jobs:
+  run:
+    name: 파이프라인 실행
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      NCP_APIGW_API_KEY_ID: ${{ secrets.NCP_APIGW_API_KEY_ID }}
+      NCP_APIGW_API_KEY: ${{ secrets.NCP_APIGW_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      # 선택 변수 — 빈 값은 코드 기본값 사용
+      OPENAI_TEXT_MODEL: ${{ vars.OPENAI_TEXT_MODEL }}
+      OPENAI_NANO_MODEL: ${{ vars.OPENAI_NANO_MODEL }}
+      OPENAI_EMBEDDING_MODEL: ${{ vars.OPENAI_EMBEDDING_MODEL }}
+      PIPELINE_DEBATE_THRESHOLD: ${{ vars.PIPELINE_DEBATE_THRESHOLD }}
+      PIPELINE_EXPOSE_LIMIT: ${{ vars.PIPELINE_EXPOSE_LIMIT }}
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Node 22 설치
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: 데이터베이스 마이그레이션
+        run: npx prisma migrate deploy
+
+      - name: 파이프라인 실행
+        id: pipeline
+        run: |
+          set -o pipefail
+          ARGS="${{ inputs.step || 'all' }}"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="${ARGS} --dry-run"
+          fi
+          npm run pipeline -- ${ARGS} | tee pipeline-output.txt
+
+      - name: 결과를 요약에 기록
+        if: always()
+        run: |
+          {
+            echo "## 파이프라인 실행 결과"
+            echo
+            echo "- 단계: ${{ inputs.step || 'all' }}"
+            echo "- 드라이런: ${{ inputs.dry_run || 'false' }}"
+            echo "- 결과: ${{ job.status }}"
+            echo
+            echo '```'
+            cat pipeline-output.txt 2>/dev/null || echo "(출력 없음)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
