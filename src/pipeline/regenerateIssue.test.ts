@@ -17,7 +17,7 @@ import { SUMMARIZE_SCHEMA_NAME } from '@/pipeline/SummarizeSchema';
 import { VERIFY_SCHEMA_NAME } from '@/pipeline/VerifySchema';
 
 const SUMMARY_RESPONSE = {
-  question: '다시 만든 질문은 무엇일까?',
+  question: '정년을 65세로 연장해야 할까?',
   tags: ['노동', '경제'],
   summary: ['첫 문장이다.', '두 번째 문장이다.', '세 번째 문장이다.'],
   keyPoints: [
@@ -127,7 +127,7 @@ describe('regenerateIssue', () => {
 
     await regenerateIssue({ prisma, textClient: createTextClient(), issueId: 'issue-1' });
 
-    expect(db.issues[0].question).toBe('다시 만든 질문은 무엇일까?');
+    expect(db.issues[0].question).toBe('정년을 65세로 연장해야 할까?');
     expect(db.issues[0].status).toBe('REVIEW');
     expect(db.claims).toHaveLength(6);
     expect(db.claims.some((claim) => claim.id === 'claim-old')).toBe(false);

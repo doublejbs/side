@@ -44,9 +44,21 @@
   padding: 10px 12px;
 }
 
+/* 무관·반박 근거는 앱에 나가지 않는다. 삭제 대신 흐리게 둔다. */
+.unsupported .evidenceSummary,
+.unsupported .evidenceNote {
+  color: var(--color-muted);
+}
+
 .evidenceSummary {
   font-size: 13px;
   line-height: 1.5;
+}
+
+.evidenceNote {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-muted);
 }
 
 .evidenceMeta {

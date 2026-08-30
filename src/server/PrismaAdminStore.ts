@@ -1,12 +1,14 @@
 import { IssueStatus as PrismaIssueStatus, Prisma, type PrismaClient } from '@prisma/client';
 
 import {
+  issueClassificationSchema,
   keyPointsSchema,
   mediaPerspectivesSchema,
   opinionGroupsSchema,
 } from '@/data/IssueJsonSchemas';
 import {
   toDomainClaimSide,
+  toDomainEvidenceSupport,
   toDomainEvidenceType,
   toDomainIssueStatus,
   toDomainMediaLeaning,
@@ -14,19 +16,22 @@ import {
   toPrismaIssueStatus,
   toPrismaMediaLeaning,
 } from '@/data/PrismaEnumMappers';
+import type { EvidenceSupport } from '@/domain/EvidenceSupport';
 import type { KeyPoint, MediaPerspective, OpinionGroup } from '@/domain/Issue';
+import type { IssueClassification } from '@/domain/IssueClassification';
 import { IssueStatus } from '@/domain/IssueStatus';
-import type {
-  AdminClaimPatch,
-  AdminClaimPatchEntry,
-  AdminEvidencePatch,
-  AdminIssueDetail,
-  AdminIssueListItem,
-  AdminIssuePatch,
-  AdminPublisher,
-  AdminPublisherInput,
-  AdminSearchQuery,
-  AdminStore,
+import {
+  RESTORED_DEBATE_SCORE,
+  type AdminClaimPatch,
+  type AdminClaimPatchEntry,
+  type AdminEvidencePatch,
+  type AdminIssueDetail,
+  type AdminIssueListItem,
+  type AdminIssuePatch,
+  type AdminPublisher,
+  type AdminPublisherInput,
+  type AdminSearchQuery,
+  type AdminStore,
 } from '@/server/AdminStore';
 
 /** Json 컬럼은 검증에 실패하면 폼이 깨지지 않도록 빈 배열로 떨어뜨린다. */
@@ -47,6 +52,17 @@ const parseOpinionGroups = (value: unknown): OpinionGroup[] => {
 
   return parsed.success ? parsed.data : [];
 };
+
+/** 분류 Json 도 검증에 실패하면 화면이 깨지지 않도록 "아직 분류되지 않음"으로 떨어뜨린다. */
+const parseClassification = (value: unknown): IssueClassification | null => {
+  const parsed = issueClassificationSchema.safeParse(value);
+
+  return parsed.success ? parsed.data : null;
+};
+
+/** 아직 검증되지 않은 근거는 `support` 가 비어 있다. */
+const parseEvidenceSupport = (value: string | null): EvidenceSupport | null =>
+  value === null ? null : toDomainEvidenceSupport(value);
 
 const toJson = (value: unknown): Prisma.InputJsonValue => value as Prisma.InputJsonValue;
 
@@ -83,6 +99,9 @@ export class PrismaAdminStore implements AdminStore {
         question: true,
         createdAt: true,
         reviewNote: true,
+        debateScore: true,
+        topic: true,
+        classification: true,
         _count: { select: { articles: true, claims: true } },
       },
     });
@@ -94,6 +113,9 @@ export class PrismaAdminStore implements AdminStore {
       claimCount: row._count.claims,
       createdAt: row.createdAt,
       hasWarning: status !== IssueStatus.REJECTED && Boolean(row.reviewNote),
+      debateScore: row.debateScore,
+      topic: row.topic,
+      hasDuplicateWarning: Boolean(parseClassification(row.classification)?.duplicateOfIssueId),
     }));
   }
 
@@ -112,6 +134,11 @@ export class PrismaAdminStore implements AdminStore {
         mediaPerspectives: true,
         opinionGroups: true,
         reviewNote: true,
+        classification: true,
+        debateScore: true,
+        topic: true,
+        classifiedAt: true,
+        verifiedAt: true,
         createdAt: true,
         publishedAt: true,
         claims: {
@@ -124,7 +151,16 @@ export class PrismaAdminStore implements AdminStore {
             description: true,
             evidences: {
               orderBy: { date: 'desc' },
-              select: { id: true, type: true, source: true, date: true, summary: true, url: true },
+              select: {
+                id: true,
+                type: true,
+                source: true,
+                date: true,
+                summary: true,
+                url: true,
+                support: true,
+                verificationNote: true,
+              },
             },
           },
         },
@@ -158,6 +194,11 @@ export class PrismaAdminStore implements AdminStore {
       mediaPerspectives: parseMediaPerspectives(row.mediaPerspectives),
       opinionGroups: parseOpinionGroups(row.opinionGroups),
       reviewNote: row.reviewNote,
+      classification: parseClassification(row.classification),
+      debateScore: row.debateScore,
+      topic: row.topic,
+      classifiedAt: row.classifiedAt,
+      verifiedAt: row.verifiedAt,
       createdAt: row.createdAt,
       publishedAt: row.publishedAt,
       claims: row.claims.map((claim) => ({
@@ -173,6 +214,8 @@ export class PrismaAdminStore implements AdminStore {
           date: evidence.date,
           summary: evidence.summary,
           url: evidence.url,
+          support: parseEvidenceSupport(evidence.support),
+          verificationNote: evidence.verificationNote,
         })),
       })),
       articles: row.articles,
@@ -237,6 +280,17 @@ export class PrismaAdminStore implements AdminStore {
     await this.prisma.issue.update({
       where: { id },
       data: { status: PrismaIssueStatus.REJECTED, reviewNote: note },
+    });
+  }
+
+  /**
+   * 복원(관리자 승격). 상태만 되돌리고 `reviewNote`·`classifiedAt` 은 판단 근거로 남긴다.
+   * 다음 실행에서 임계값과 무관하게 요약 대상이 되도록 점수를 상한값으로 올린다.
+   */
+  async restoreIssue(id: string): Promise<void> {
+    await this.prisma.issue.update({
+      where: { id },
+      data: { status: PrismaIssueStatus.DRAFT, debateScore: RESTORED_DEBATE_SCORE },
     });
   }
 

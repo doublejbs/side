@@ -11,6 +11,9 @@ const createItem = (overrides: Partial<AdminIssueListItem> = {}): AdminIssueList
   claimCount: 6,
   createdAt: new Date('2026-01-05T00:00:00.000Z'),
   hasWarning: false,
+  debateScore: 82,
+  topic: '노동',
+  hasDuplicateWarning: false,
   ...overrides,
 });
 
@@ -25,6 +28,27 @@ describe('IssueReviewListView', () => {
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(screen.getByText('6')).toBeInTheDocument();
     expect(screen.getByText('2026.01.05')).toBeInTheDocument();
+  });
+
+  it('논쟁성 점수와 주제를 함께 보여준다', () => {
+    render(<IssueReviewListView issues={[createItem()]} />);
+
+    expect(screen.getByRole('columnheader', { name: '점수' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '주제' })).toBeInTheDocument();
+    expect(screen.getByText('82')).toBeInTheDocument();
+    expect(screen.getByText('노동')).toBeInTheDocument();
+  });
+
+  it('아직 분류되지 않은 이슈는 점수·주제 자리를 비워 표시한다', () => {
+    render(<IssueReviewListView issues={[createItem({ debateScore: null, topic: null })]} />);
+
+    expect(screen.getAllByText('–')).toHaveLength(2);
+  });
+
+  it('중복 후보로 표시된 이슈에는 중복 배지를 붙인다', () => {
+    render(<IssueReviewListView issues={[createItem({ hasDuplicateWarning: true })]} />);
+
+    expect(screen.getByText('중복 가능')).toBeInTheDocument();
   });
 
   it('검수 메모가 있으면 경고 배지를 붙인다', () => {

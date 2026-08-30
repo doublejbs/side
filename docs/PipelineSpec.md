@@ -243,13 +243,13 @@ CLI: `npm run pipeline -- [collect|cluster|classify|summarize|extract|verify|lin
 - 로그인 `/admin/login`: 폼 → 서버 액션이 `ADMIN_PASSWORD` 비교 → `side_admin` HttpOnly 쿠키(HMAC 서명, `ANON_COOKIE_SECRET` 사용, 12시간). `src/proxy.ts`(Next 16의 middleware 대체 파일명)에서 `/admin/**` 보호.
 - 라우트 구성: 로그인 화면을 뺀 검수 화면들은 **라우트 그룹 `src/app/admin/(review)/`** 아래 둔다(URL에는 그룹 이름이 드러나지 않는다). 그룹 레이아웃이 세션을 확인하므로 `/admin/login`만 인증 밖이다.
 - 프록시 통과는 1차 방어일 뿐이므로, **서버 액션은 실행 시작 시 `requireAdminSession()`(`src/server/requireAdminSession.ts`)으로 세션 쿠키를 다시 검증**한다. 서버 액션은 URL이 아니라 POST 엔드포인트로 직접 호출될 수 있기 때문이다.
-- `/admin` 목록: 상태 탭(REVIEW 기본 / DRAFT / PUBLISHED / REJECTED), 각 행: 질문, 기사 수, 주장 수, 생성일, 경고 배지.
+- `/admin` 목록: 상태 탭(REVIEW 기본 / DRAFT / AUTO_REJECTED / PUBLISHED / REJECTED), 각 행: 질문, 기사 수, 주장 수, 논쟁성 점수, 주제, 생성일, 경고·중복 배지.
 - `/admin/issues/[id]` 검수 폼(서버 액션):
   - 질문·태그·요약 문장·쟁점 4개 편집
   - 주장 6개(찬 3/반 3) 제목·설명 편집, 근거 목록(타입 변경·삭제), 기사 원문 링크
   - 언론 관점 3개 프레임·키워드·대표 기사 편집, 공통 내용 편집
   - 의견 그룹 3개 편집
-  - 버튼: **저장**, **승인(PUBLISHED, slug 생성)**, **반려(REJECTED + 메모)**, **요약 다시 생성**
+  - 버튼: **저장**, **승인(PUBLISHED, slug 생성)**, **반려(REJECTED + 메모)**, **요약 다시 생성**, 자동 제외·반려 상태에서만 **검수 대상으로 복원**(→ DRAFT, `debateScore=100`, `reviewNote`·`classifiedAt` 유지 — `docs/PipelineTieringSpec.md` 5장)
 - **요약 다시 생성**(`regenerateIssue.ts`)의 규칙:
   - `status`가 `DRAFT`·`REVIEW`가 아니면 `RegenerateNotAllowedError`를 던진다. 이미 공개·반려된 이슈의 주장을 말없이 갈아 끼우지 않는다. 화면에서도 그 상태에서는 버튼을 비활성으로 두고 이유를 적는다.
   - 먼저 LLM 결과(요약·논점)를 **메모리로** 모두 받아 검증하고, 성공했을 때만 한 트랜잭션에서 기존 주장 삭제 → 새 주장 저장 → 이슈 갱신 → `status=REVIEW`를 한다. 실패하면 DB는 전혀 바뀌지 않는다.
@@ -290,7 +290,7 @@ CLI: `npm run pipeline -- [collect|cluster|classify|summarize|extract|verify|lin
 - 클라이언트 모킹: `NaverNewsClient`(fetch 모킹: 정상/429 재시도/HTML 제거), `summarizeIssues`·`extractClaims`(`FakeTextClient`가 고정 JSON 반환 → zod 검증·`articleIndex` 범위 처리), `linkSources`(근거 수·범위·주장 수 경고).
 - 모델 티어링: `classifySchema`·`verifySchema` zod 경계, `classifyIssues`(통과·자동 제외·중복 경고·존재하지 않는 중복 id 무시·실패 격리), `verifyEvidence`(판정 저장·경고 누적·삭제하지 않음·모르는 id 무시), `summarizeIssues`·`extractClaims` 대상 조건(임계값·노출 상한·`AUTO_REJECTED` 제외), `linkSources`의 `verifiedAt` 조건, `IssueMapper` 미지지 근거 제외, `PrismaEnumMappers` `AUTO_REJECTED`·`EvidenceSupport`, `PipelineStepPlan` 단계 순서·단계별 필수 env, `PipelineEnv` 숫자 변수 범위 검증.
 - API 라우트: Prisma 클라이언트를 인터페이스(`VoteStore` — `src/server/VoteStore.ts`)로 감싸 인메모리 구현(`InMemoryVoteStore.ts`)으로 테스트(투표 upsert, 분포 집계, 쿠키 발급).
-- 관리자: 로그인 쿠키 서명/검증 단위 테스트, 승인 시 slug 생성 규칙 테스트.
+- 관리자: 로그인 쿠키 서명/검증 단위 테스트, 승인 시 slug 생성 규칙 테스트, 복원 유스케이스(허용 상태·`reviewNote`/`classifiedAt` 유지) 테스트.
 - 테스트 대역은 `src/testing/`에 모은다(`FakePrismaClient.ts` — 파이프라인·관리자 코드가 실제로 쓰는 질의만 흉내 내는 인메모리 Prisma 대역). 프로덕션 코드는 이 디렉터리를 import 하지 않는다.
 - `--dry-run` 고정 응답이 `summarizeSchema`·`extractSchema`를 통과하는지도 테스트로 지킨다(`DryRunClients.test.ts`).
 - DB 통합 테스트는 `DATABASE_URL_TEST`가 있을 때만 실행(`describe.skipIf`).

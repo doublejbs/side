@@ -5,6 +5,7 @@ import { AdminTextAreaFieldView } from '@/components/admin/AdminTextAreaFieldVie
 import { ClaimEditorListView } from '@/components/admin/ClaimEditorListView';
 import { IssueActionBarView } from '@/components/admin/IssueActionBarView';
 import { IssueBasicFieldsView } from '@/components/admin/IssueBasicFieldsView';
+import { IssueClassificationCardView } from '@/components/admin/IssueClassificationCardView';
 import { MediaPerspectiveEditorView } from '@/components/admin/MediaPerspectiveEditorView';
 import { OpinionGroupEditorView } from '@/components/admin/OpinionGroupEditorView';
 import { ReviewArticleListView } from '@/components/admin/ReviewArticleListView';
@@ -21,6 +22,7 @@ interface Props {
   saveClaimAction: (formData: FormData) => Promise<void>;
   publishIssueAction: (formData: FormData) => Promise<void>;
   rejectIssueAction: (formData: FormData) => Promise<void>;
+  restoreIssueAction: (formData: FormData) => Promise<void>;
   regenerateIssueAction: (formData: FormData) => Promise<void>;
   updateEvidenceTypeAction: (formData: FormData) => Promise<void>;
   deleteEvidenceAction: (formData: FormData) => Promise<void>;
@@ -36,6 +38,7 @@ export const IssueReviewFormView = ({
   saveClaimAction,
   publishIssueAction,
   rejectIssueAction,
+  restoreIssueAction,
   regenerateIssueAction,
   updateEvidenceTypeAction,
   deleteEvidenceAction,
@@ -56,6 +59,14 @@ export const IssueReviewFormView = ({
         {issue.reviewNote}
       </AdminBannerView>
     ) : null}
+
+    <IssueClassificationCardView
+      classification={issue.classification}
+      debateScore={issue.debateScore}
+      topic={issue.topic}
+      classifiedAt={issue.classifiedAt}
+      verifiedAt={issue.verifiedAt}
+    />
 
     <IssueBasicFieldsView
       question={issue.question}
@@ -91,6 +102,7 @@ export const IssueReviewFormView = ({
       status={issue.status}
       publishIssueAction={publishIssueAction}
       rejectIssueAction={rejectIssueAction}
+      restoreIssueAction={restoreIssueAction}
       regenerateIssueAction={regenerateIssueAction}
     />
   </form>

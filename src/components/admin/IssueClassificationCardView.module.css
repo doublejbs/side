@@ -1,0 +1,117 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 96px;
+  padding: 10px 12px;
+  border-radius: var(--radius-tile);
+  background: var(--color-brand-tint);
+}
+
+.scoreValue {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--color-brand-strong);
+}
+
+.scoreLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.summaryBody {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.topic {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.reason {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-muted);
+}
+
+.duplicate {
+  padding: 8px 12px;
+  border-radius: var(--radius-control);
+  background: var(--color-disagree-tint);
+  color: var(--color-disagree);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.duplicateLink {
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.blockTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-muted);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 16px;
+  list-style: disc;
+}
+
+.listItem {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg);
+  font-size: 12px;
+}
+
+.timestamps {
+  font-size: 12px;
+  color: var(--color-muted-2);
+}
+
+.empty {
+  font-size: 13px;
+  color: var(--color-muted);
+}

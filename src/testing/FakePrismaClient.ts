@@ -113,7 +113,7 @@ export interface FakeCall {
 }
 
 interface IssueWhere {
-  id?: string;
+  id?: string | { in?: string[] };
   status?: string | { in?: string[] };
   question?: { not?: string };
   createdAt?: { gte?: Date };
@@ -218,7 +218,11 @@ const matchesIssue = (
     return true;
   }
 
-  if (where.id !== undefined && issue.id !== where.id) {
+  if (typeof where.id === 'string' && issue.id !== where.id) {
+    return false;
+  }
+
+  if (typeof where.id === 'object' && where.id.in && !where.id.in.includes(issue.id)) {
     return false;
   }
 

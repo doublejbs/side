@@ -47,6 +47,22 @@
   font-weight: 700;
 }
 
+.duplicate {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-brand-tint);
+  color: var(--color-brand-strong);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.topic {
+  width: 96px;
+  color: var(--color-muted);
+}
+
 .numeric {
   width: 72px;
   text-align: right;

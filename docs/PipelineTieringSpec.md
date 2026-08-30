@@ -80,7 +80,14 @@ interface EvidenceVerdict { evidenceId: string; support: EvidenceSupport; type: 
 - 결과: `{ classified, passed, autoRejected, duplicates, failed[] }`.
 
 ### 4.2 `summarize` · `extract` 변경
-- 대상 조건에 `debateScore >= threshold` 추가, `debateScore desc` 정렬 후 `PIPELINE_EXPOSE_LIMIT`개까지만 처리(`--issue` 지정 시 제한 무시, 단 AUTO_REJECTED는 제외).
+- 대상 조건에 `debateScore >= threshold` 추가, 아래 순서로 정렬한 뒤 `PIPELINE_EXPOSE_LIMIT`개까지만 처리(`--issue` 지정 시 제한 무시, 단 AUTO_REJECTED는 제외).
+- **대상 정렬**(`sortDuplicateAwareIssues`): `classification.duplicateOfIssueId` 없음 우선 → `debateScore` 내림차순 → 기사 수 내림차순. 중복으로 표시된 이슈를 뒤로 밀어, 상한 안에서 원본 이슈가 먼저 처리되게 한다.
+- **중복 이슈 보류**(`duplicateHold.ts`): `classification.duplicateOfIssueId`가 **같은 실행 대상 집합 안의 다른 이슈** 또는 이미 `REVIEW`/`PUBLISHED`인 이슈를 가리키면, 그 이슈는 요약·추출하지 않고 `skipped`로 두고 `reviewNote`에 `[중복으로 보류] {대상 question}`을 남긴다(`appendNoteLine` 이 같은 줄을 두 번 쓰지 않으므로 한 번만 남는다). classify가 남긴 `[중복 가능]` 경고는 그대로 두고 덧붙인다. 병합·복원은 관리자가 판단한다(자동 병합·삭제 없음).
+  - 두 이슈가 서로를 가리키면 둘 다 빠지지 않도록 먼저 보류된 쪽만 보류한다.
+  - 가리키는 이슈가 없거나(지어낸 id) 대상 집합에도 없고 `REVIEW`/`PUBLISHED`도 아니면 보류하지 않는다.
+  - `--issue` 지정 시에는 보류하지 않는다(관리자가 직접 고른 이슈다).
+  - `extract`는 이미 `summarize`가 메모를 남겼으므로 대상에서 빼기만 한다.
+- **질문 형식**: `summarize`의 `question`은 찬성/반대로 답할 수 있는 정책·제도 질문이어야 한다. 프롬프트(`SummarizePrompt.ts`)에 허용 형식(`~해야 할까?`·`~가 필요한가?`·`~를 허용해야 할까?`)과 금지 형식(`~쟁점은 무엇인가?`·`~어떻게 되나?`·`~막을 수 있나?`·`~될까?`·`~연결되나?`), 좋은 예·나쁜 예 3개씩을 명시한다. `summarizeSchema.question`은 `isStanceQuestion`(`src/pipeline/isStanceQuestion.ts` — 금지 어미 목록·허용 어미 목록 상수)으로 검증하고, 실패하면 `OpenAiTextClient`가 실패 사유를 붙여 1회 재시도한다.
 - 프롬프트 입력에 `classification.keySentences`·`keyClaims`를 "사전 추출 요지"로 추가해 기사 원문 의존을 줄인다(기사 입력은 유지).
 - 모델은 `OPENAI_TEXT_MODEL`(기본 `gpt-5.4-mini`).
 
@@ -99,11 +106,18 @@ interface EvidenceVerdict { evidenceId: string; support: EvidenceSupport; type: 
 - `--dry-run`: `FakeTextClient`에 classify/verify 고정 응답 추가(`DryRunClients`).
 - `regenerateIssue`(관리자 "요약 다시 생성")는 classify를 건너뛰고 summarize → extract → verify → link 순으로 재실행(분류는 유지).
 
-## 5. 관리자 화면 변경
-- 목록: 상태 탭에 **자동 제외** 추가(`AUTO_REJECTED`). 행에 `debateScore`·`topic` 컬럼, 중복 경고 배지.
-- 자동 제외 이슈 상세에서 **"검수 대상으로 복원"** 버튼(→ DRAFT, `reviewNote` 유지) — 오탐 복구용. 복원된 이슈는 다음 실행에서 임계값과 무관하게 summarize 대상(관리자 승격 = `debateScore`를 `100`으로 설정).
-- 검수 폼 상단에 분류 카드: 점수·주제·판정 근거·핵심 문장·핵심 주장·인물/기관(읽기 전용).
-- 근거 목록에 검증 배지(지지/부분/무관/반박)와 note 표시, 무관·반박은 회색 처리(삭제는 기존 버튼).
+## 5. 관리자 화면 변경 (구현됨)
+
+- 목록 `/admin?status=`: 상태 탭 순서는 **검수 대기 · 초안 · 자동 제외 · 발행됨 · 반려됨**(`IssueStatusTabsView`). 자동 제외 탭이 초안 바로 뒤에 오는 이유는 오탐을 초안과 나란히 확인하기 위해서다.
+- 목록 행: 질문 · 기사 수 · 주장 수 · **점수(`debateScore`)** · **주제(`topic`)** · 생성일. 아직 분류되지 않아 값이 없으면 `–`. 질문 옆에는 기존 `검수 경고` 배지에 더해 `classification.duplicateOfIssueId` 가 있으면 **`중복 가능`** 배지를 붙인다(`AdminIssueListItem.hasDuplicateWarning`).
+- 검수 폼 상단 **분류 카드**(`IssueClassificationCardView`, 읽기 전용): 점수(큰 숫자)·주제·판정 근거(`reason`)·핵심 문장·핵심 주장·인물/기관 칩·분류/검증 시각. `duplicateOfIssueId` 가 있으면 `/admin/issues/{id}` 로 가는 중복 후보 링크를 함께 보여 준다. `classification` 이 없으면 "아직 분류되지 않음"만 적는다. `classification` Json 이 스키마 검증에 실패해도 폼 전체가 깨지지 않도록 `null` 로 떨어뜨린다(다른 Json 컬럼과 같은 규칙).
+- 근거 목록: 검증된 근거에만 판정 배지(`EvidenceSupportBadgeView` — 지지 `--color-agree` / 부분 `--color-brand` / 무관 `--color-muted` / 반박 `--color-disagree`)와 `verificationNote`(12px)를 보여 준다. 미검증(`support = null`)이면 배지가 없다. 무관·반박 근거는 텍스트를 흐리게 두고 `title` 툴팁으로 "앱에는 노출되지 않음"을 알린다. **삭제는 하지 않는다**(기존 삭제 버튼은 그대로).
+- **복원**: `AUTO_REJECTED`·`REJECTED` 상세에서만 **"검수 대상으로 복원"** 버튼을 보여 준다(`IssueActionBarView`). 서버 액션 `restoreIssueAction` → `adminUseCases.restoreIssue` → `AdminStore.restoreIssue`.
+  - 허용 상태는 `AUTO_REJECTED`·`REJECTED` 뿐이며, 그 밖의 상태는 `AdminActionError(ERROR_NOT_RESTORABLE)` 로 막는다(폼이 조작돼도 서버에서 다시 확인한다).
+  - 복원은 `status = DRAFT`, `debateScore = 100`(`RESTORED_DEBATE_SCORE`, 관리자 승격)만 바꾼다. 다음 실행에서 임계값과 무관하게 summarize 대상이 되기 위해서다.
+  - **`reviewNote` 와 `classifiedAt` 은 지우지 않는다.** `reviewNote` 는 왜 제외됐는지(`[자동 제외] …`)를 남기는 판단 근거이고, `classifiedAt` 을 지우면 `classify` 가 같은 이슈를 다시 분류해 방금 올린 점수를 원래 값으로 덮어써 복원이 무효가 된다(4.1의 재분류 조건 참고).
+  - 성공하면 `AdminMessage.RESTORED` 와 함께 `/admin?status=DRAFT` 로 보낸다. 목록 화면도 `?message=` 를 배너로 읽는다.
+- 자동 제외 상태에서 **승인·저장은 기존 규칙 그대로**(승인은 `REVIEW` 만 허용), **요약 다시 생성은 비활성**이며 이유를 버튼 옆 문구와 `title` 툴팁으로 적는다(`REGENERATABLE_STATUSES` = DRAFT·REVIEW).
 - `/admin/publishers` 변경 없음.
 
 ## 6. 앱 변경

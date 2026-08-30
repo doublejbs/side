@@ -2,6 +2,13 @@ import { IssueStatus, type Prisma, type PrismaClient } from '@prisma/client';
 
 import { issueClassificationSchema } from '@/data/IssueJsonSchemas';
 import { ARTICLE_SELECT } from '@/pipeline/articleSelect';
+import {
+  collectDuplicateOfIssueIds,
+  duplicateHoldNote,
+  loadDuplicateTargets,
+  resolveDuplicateHolds,
+  sortDuplicateAwareIssues,
+} from '@/pipeline/duplicateHold';
 import { DEFAULT_DEBATE_THRESHOLD, DEFAULT_EXPOSE_LIMIT } from '@/pipeline/PipelineEnv';
 import {
   selectPromptArticles,
@@ -55,6 +62,7 @@ const SUMMARIZE_ISSUE_SELECT = {
   status: true,
   question: true,
   reviewNote: true,
+  debateScore: true,
   classification: true,
   summarizedAt: true,
   summarizedArticleCount: true,
@@ -197,6 +205,24 @@ export const applySummaryDraft = async (
 };
 
 /**
+ * 중복으로 보류한 이슈에 검수 메모만 남긴다(요약·추출은 하지 않는다).
+ * 같은 줄이 이미 있으면 아무것도 쓰지 않는다.
+ */
+const holdAsDuplicate = async (
+  prisma: PrismaClient,
+  issue: { id: string; reviewNote: string | null },
+  targetQuestion: string,
+): Promise<void> => {
+  const reviewNote = appendNoteLine(issue.reviewNote, duplicateHoldNote(targetQuestion));
+
+  if (reviewNote === issue.reviewNote) {
+    return;
+  }
+
+  await prisma.issue.update({ where: { id: issue.id }, data: { reviewNote } });
+};
+
+/**
  * DRAFT·REVIEW 이슈의 질문·태그·요약·핵심 쟁점을 만든다.
  * 이슈 하나가 실패해도 나머지는 계속 처리하고 실패한 id 를 결과에 담는다.
  * 근거: `docs/PipelineSpec.md` 4.3장.
@@ -221,8 +247,17 @@ export const summarizeIssues = async ({
     orderBy: { debateScore: 'desc' },
     select: SUMMARIZE_ISSUE_SELECT,
   });
-  // 논쟁성이 높은 이슈부터 상한만큼만 비싼 모델에 넘긴다.
-  const targets = issueId === undefined ? issues.slice(0, exposeLimit) : issues;
+  // 중복 표시가 없는 이슈부터, 논쟁성이 높은 순서로 상한만큼만 비싼 모델에 넘긴다.
+  const targets =
+    issueId === undefined ? sortDuplicateAwareIssues(issues).slice(0, exposeLimit) : issues;
+  // `--issue` 로 지정하면 중복이어도 보류하지 않는다(관리자가 직접 고른 이슈다).
+  const holds =
+    issueId === undefined
+      ? resolveDuplicateHolds(
+          targets,
+          await loadDuplicateTargets(prisma, collectDuplicateOfIssueIds(targets)),
+        )
+      : new Map<string, string>();
 
   let summarized = 0;
   let skipped = 0;
@@ -231,6 +266,15 @@ export const summarizeIssues = async ({
   for (const issue of targets) {
     const forced = issueId !== undefined;
     const articleCount = issue.articles.length;
+    const holdQuestion = holds.get(issue.id);
+
+    if (holdQuestion !== undefined) {
+      await holdAsDuplicate(prisma, issue, holdQuestion);
+
+      skipped += 1;
+
+      continue;
+    }
 
     if (articleCount === 0 || (!forced && !shouldSummarize(issue, articleCount))) {
       skipped += 1;

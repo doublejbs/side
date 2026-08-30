@@ -478,3 +478,164 @@ describe('clusterArticles → classifyIssues → summarizeIssues 연속 실행',
     expect(db.issues[0].summarizedArticleCount).toBe(5);
   });
 });
+
+/** classify 결과. `duplicateOfIssueId` 를 넣으면 중복으로 표시된 이슈가 된다. */
+const classificationOf = (duplicateOfIssueId?: string) => ({
+  isPolicyDebate: true,
+  debateScore: 80,
+  topic: '노동',
+  reason: '정년 제도 변경에 찬반이 갈린다.',
+  entities: [],
+  keySentences: [],
+  keyClaims: [],
+  ...(duplicateOfIssueId === undefined ? {} : { duplicateOfIssueId }),
+});
+
+describe('summarizeIssues 중복 보류', () => {
+  it('중복 쌍은 하나만 요약하고 나머지는 보류 메모만 남긴다', async () => {
+    const { db, prisma } = createFakePrismaClient({
+      issues: [
+        createClassifiedIssueRow({
+          id: 'issue-origin',
+          question: '정년을 65세로 연장해야 할까?',
+          classification: classificationOf(),
+        }),
+        createClassifiedIssueRow({
+          id: 'issue-dup',
+          classification: classificationOf('issue-origin'),
+        }),
+      ],
+      articles: [
+        createFakeArticleRow({ id: 'a1', issueId: 'issue-origin' }),
+        createFakeArticleRow({ id: 'a2', issueId: 'issue-dup' }),
+      ],
+    });
+
+    const result = await summarizeIssues({ prisma, textClient: createTextClient() });
+
+    expect(result).toEqual({ summarized: 1, skipped: 1, failed: [] });
+    expect(db.issues[0].question).toBe('주 4.5일제를 도입해야 할까?');
+    expect(db.issues[1].question).toBe(UNDECIDED_QUESTION);
+    expect(db.issues[1].reviewNote).toBe('[중복으로 보류] 정년을 65세로 연장해야 할까?');
+  });
+
+  it('이미 검수 중인 이슈를 가리키면 보류한다', async () => {
+    const { db, prisma } = createFakePrismaClient({
+      issues: [
+        createClassifiedIssueRow({
+          id: 'issue-dup',
+          classification: classificationOf('issue-review'),
+        }),
+        createFakeIssueRow({
+          id: 'issue-review',
+          status: IssueStatus.PUBLISHED,
+          question: '주 4.5일제를 도입해야 할까?',
+        }),
+      ],
+      articles: [createFakeArticleRow({ id: 'a1', issueId: 'issue-dup' })],
+    });
+    const textClient = createTextClient();
+
+    const result = await summarizeIssues({ prisma, textClient });
+
+    expect(result).toEqual({ summarized: 0, skipped: 1, failed: [] });
+    expect(textClient.requests).toHaveLength(0);
+    expect(db.issues[0].reviewNote).toBe('[중복으로 보류] 주 4.5일제를 도입해야 할까?');
+  });
+
+  it('기존 경고를 지우지 않고 보류 메모를 한 번만 덧붙인다', async () => {
+    const { calls, db, prisma } = createFakePrismaClient({
+      issues: [
+        createClassifiedIssueRow({
+          id: 'issue-origin',
+          question: '정년을 65세로 연장해야 할까?',
+          summarizedAt: SUMMARIZED_AT,
+          summarizedArticleCount: 1,
+          classification: classificationOf(),
+        }),
+        createClassifiedIssueRow({
+          id: 'issue-dup',
+          reviewNote: '[중복 가능] 정년을 65세로 연장해야 할까?',
+          classification: classificationOf('issue-origin'),
+        }),
+      ],
+      articles: [
+        createFakeArticleRow({ id: 'a1', issueId: 'issue-origin' }),
+        createFakeArticleRow({ id: 'a2', issueId: 'issue-dup' }),
+      ],
+    });
+
+    await summarizeIssues({ prisma, textClient: createTextClient() });
+
+    expect(db.issues[1].reviewNote).toBe(
+      '[중복 가능] 정년을 65세로 연장해야 할까?\n[중복으로 보류] 정년을 65세로 연장해야 할까?',
+    );
+
+    // 두 번째 실행은 같은 줄을 다시 쓰지 않는다.
+    await summarizeIssues({ prisma, textClient: createTextClient() });
+
+    expect(db.issues[1].reviewNote).toBe(
+      '[중복 가능] 정년을 65세로 연장해야 할까?\n[중복으로 보류] 정년을 65세로 연장해야 할까?',
+    );
+    expect(
+      calls.filter((call) => call.model === 'issue' && call.method === 'update'),
+    ).toHaveLength(1);
+  });
+
+  it('issueId 를 지정하면 중복이어도 보류하지 않는다', async () => {
+    const { db, prisma } = createFakePrismaClient({
+      issues: [
+        createClassifiedIssueRow({
+          id: 'issue-origin',
+          question: '정년을 65세로 연장해야 할까?',
+          classification: classificationOf(),
+        }),
+        createClassifiedIssueRow({
+          id: 'issue-dup',
+          classification: classificationOf('issue-origin'),
+        }),
+      ],
+      articles: [
+        createFakeArticleRow({ id: 'a1', issueId: 'issue-origin' }),
+        createFakeArticleRow({ id: 'a2', issueId: 'issue-dup' }),
+      ],
+    });
+
+    const result = await summarizeIssues({
+      prisma,
+      textClient: createTextClient(),
+      issueId: 'issue-dup',
+    });
+
+    expect(result).toEqual({ summarized: 1, skipped: 0, failed: [] });
+    expect(db.issues[1].question).toBe('주 4.5일제를 도입해야 할까?');
+    expect(db.issues[1].reviewNote).toBeNull();
+  });
+
+  it('중복 표시가 있는 이슈는 점수가 높아도 뒤로 밀린다', async () => {
+    const { db, prisma } = createFakePrismaClient({
+      issues: [
+        createClassifiedIssueRow({
+          id: 'issue-dup',
+          debateScore: 95,
+          classification: classificationOf('issue-other'),
+        }),
+        createClassifiedIssueRow({
+          id: 'issue-clean',
+          debateScore: 65,
+          classification: classificationOf(),
+        }),
+      ],
+      articles: [
+        createFakeArticleRow({ id: 'a1', issueId: 'issue-dup' }),
+        createFakeArticleRow({ id: 'a2', issueId: 'issue-clean' }),
+      ],
+    });
+
+    const result = await summarizeIssues({ prisma, textClient: createTextClient(), exposeLimit: 1 });
+
+    expect(result.summarized).toBe(1);
+    expect(db.issues[1].question).toBe('주 4.5일제를 도입해야 할까?');
+    expect(db.issues[0].question).toBe(UNDECIDED_QUESTION);
+  });
+});

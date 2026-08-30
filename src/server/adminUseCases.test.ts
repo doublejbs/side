@@ -4,7 +4,7 @@ import { IssueStatus } from '@/domain/IssueStatus';
 import { MediaLeaning } from '@/domain/MediaLeaning';
 import { AdminActionError } from '@/server/AdminActionError';
 import { AdminMessage } from '@/server/AdminMessage';
-import type { AdminIssueDetail } from '@/server/AdminStore';
+import { RESTORED_DEBATE_SCORE, type AdminIssueDetail } from '@/server/AdminStore';
 import { InMemoryAdminStore } from '@/server/InMemoryAdminStore';
 import { PUBLIC_PAGE_TARGETS, type PublicPageTarget } from '@/server/PublicPageTargets';
 
@@ -16,6 +16,7 @@ import {
   parseTagList,
   publishIssue,
   rejectIssue,
+  restoreIssue,
   saveClaim,
   saveIssue,
   savePublisher,
@@ -46,6 +47,11 @@ const createIssue = (overrides: Partial<AdminIssueDetail> = {}): AdminIssueDetai
     },
   ],
   reviewNote: null,
+  classification: null,
+  debateScore: null,
+  topic: null,
+  classifiedAt: null,
+  verifiedAt: null,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   publishedAt: null,
   claims: [
@@ -476,6 +482,8 @@ describe('근거 소유권 확인', () => {
                   date: new Date('2026-01-01T00:00:00.000Z'),
                   summary: '요약',
                   url: 'https://example.com/1',
+                  support: null,
+                  verificationNote: null,
                 },
               ],
             },
@@ -498,6 +506,8 @@ describe('근거 소유권 확인', () => {
                   date: new Date('2026-01-01T00:00:00.000Z'),
                   summary: '요약',
                   url: 'https://example.com/2',
+                  support: null,
+                  verificationNote: null,
                 },
               ],
             },
@@ -542,5 +552,56 @@ describe('근거 소유권 확인', () => {
 
     await deleteEvidence(store, 'issue-1', 'evidence-1');
     expect((await store.getIssue('issue-1'))?.claims[0]?.evidences).toHaveLength(0);
+  });
+});
+
+describe('restoreIssue', () => {
+  it('자동 제외된 이슈를 초안으로 되돌리고 점수를 상한값으로 올린다', async () => {
+    const store = new InMemoryAdminStore({
+      issues: [
+        createIssue({
+          status: IssueStatus.AUTO_REJECTED,
+          debateScore: 30,
+          reviewNote: '[자동 제외] 정책 논쟁이 아니다',
+        }),
+      ],
+    });
+
+    await restoreIssue(store, 'issue-1');
+
+    const issue = await store.getIssue('issue-1');
+
+    expect(issue?.status).toBe(IssueStatus.DRAFT);
+    expect(issue?.debateScore).toBe(RESTORED_DEBATE_SCORE);
+    expect(issue?.reviewNote).toBe('[자동 제외] 정책 논쟁이 아니다');
+  });
+
+  it('반려된 이슈도 복원할 수 있다', async () => {
+    const store = new InMemoryAdminStore({
+      issues: [createIssue({ status: IssueStatus.REJECTED, reviewNote: '근거 부족' })],
+    });
+
+    await restoreIssue(store, 'issue-1');
+
+    expect((await store.getIssue('issue-1'))?.status).toBe(IssueStatus.DRAFT);
+  });
+
+  it('검수 대기·초안·발행 이슈는 복원할 수 없다', async () => {
+    for (const status of [IssueStatus.REVIEW, IssueStatus.DRAFT, IssueStatus.PUBLISHED]) {
+      const store = new InMemoryAdminStore({ issues: [createIssue({ status })] });
+
+      await expect(restoreIssue(store, 'issue-1')).rejects.toThrow(
+        new AdminActionError(AdminMessage.ERROR_NOT_RESTORABLE),
+      );
+      expect((await store.getIssue('issue-1'))?.status).toBe(status);
+    }
+  });
+
+  it('없는 이슈면 찾을 수 없다고 알린다', async () => {
+    const store = new InMemoryAdminStore({ issues: [] });
+
+    await expect(restoreIssue(store, 'issue-404')).rejects.toThrow(
+      new AdminActionError(AdminMessage.ERROR_NOT_FOUND),
+    );
   });
 });

@@ -30,7 +30,7 @@ const DRY_RUN_CLASSIFICATION = {
 };
 
 const DRY_RUN_SUMMARY = {
-  question: '이 이슈를 어떻게 볼까?',
+  question: '이 제도를 도입해야 할까?',
   tags: ['시험', '자리표시자'],
   summary: [
     '이것은 dry-run 실행에서 만든 자리표시자 요약이다.',

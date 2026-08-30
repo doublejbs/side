@@ -11,6 +11,12 @@ import type { MediaLeaning } from '@/domain/MediaLeaning';
 import { buildOpinionGroupId, getOpinionGroupLabel } from '@/domain/opinionGroupPresenter';
 import { ARTICLE_SELECT, type PipelineArticleRow } from '@/pipeline/articleSelect';
 import {
+  collectDuplicateOfIssueIds,
+  loadDuplicateTargets,
+  resolveDuplicateHolds,
+  sortDuplicateAwareIssues,
+} from '@/pipeline/duplicateHold';
+import {
   EXTRACT_SCHEMA_NAME,
   extractSchema,
   type ClaimDraft,
@@ -63,6 +69,7 @@ const EXTRACT_ISSUE_SELECT = {
   status: true,
   question: true,
   reviewNote: true,
+  debateScore: true,
   classification: true,
   articles: { select: ARTICLE_SELECT },
   claims: { select: { id: true } },
@@ -408,7 +415,17 @@ export const extractClaims = async ({
     orderBy: { debateScore: 'desc' },
     select: EXTRACT_ISSUE_SELECT,
   });
-  const targets = issueId === undefined ? issues.slice(0, exposeLimit) : issues;
+  // 중복 표시가 없는 이슈부터, 논쟁성이 높은 순서로 상한만큼만 비싼 모델에 넘긴다.
+  const targets =
+    issueId === undefined ? sortDuplicateAwareIssues(issues).slice(0, exposeLimit) : issues;
+  // `--issue` 로 지정하면 중복이어도 보류하지 않는다(관리자가 직접 고른 이슈다).
+  const holds =
+    issueId === undefined
+      ? resolveDuplicateHolds(
+          targets,
+          await loadDuplicateTargets(prisma, collectDuplicateOfIssueIds(targets)),
+        )
+      : new Map<string, string>();
   const publishers = await prisma.publisher.findMany();
 
   let extracted = 0;
@@ -418,6 +435,13 @@ export const extractClaims = async ({
   for (const issue of targets) {
     const forced = issueId !== undefined;
     const hasClaims = issue.claims.length > 0;
+
+    // 요약 단계에서 이미 `[중복으로 보류]` 를 남겼으므로 여기서는 대상에서만 뺀다.
+    if (holds.has(issue.id)) {
+      skipped += 1;
+
+      continue;
+    }
 
     if (issue.articles.length === 0 || issue.question === UNDECIDED_QUESTION || (!forced && hasClaims)) {
       skipped += 1;

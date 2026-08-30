@@ -5,6 +5,7 @@ import {
   publishIssueAction,
   regenerateIssueAction,
   rejectIssueAction,
+  restoreIssueAction,
   saveClaimAction,
   saveIssueAction,
   updateEvidenceTypeAction,
@@ -46,6 +47,7 @@ const AdminIssueReviewPage = async ({ params, searchParams }: Props) => {
         saveClaimAction={saveClaimAction}
         publishIssueAction={publishIssueAction}
         rejectIssueAction={rejectIssueAction}
+        restoreIssueAction={restoreIssueAction}
         regenerateIssueAction={regenerateIssueAction}
         updateEvidenceTypeAction={updateEvidenceTypeAction}
         deleteEvidenceAction={deleteEvidenceAction}

@@ -418,3 +418,77 @@ describe('extractClaims', () => {
     expect(userPrompt).toContain('- 주장: 비용이 늘어난다');
   });
 });
+
+/** classify 결과. `duplicateOfIssueId` 를 넣으면 중복으로 표시된 이슈가 된다. */
+const classificationOf = (duplicateOfIssueId?: string) => ({
+  isPolicyDebate: true,
+  debateScore: 80,
+  topic: '노동',
+  reason: '정년 제도 변경에 찬반이 갈린다.',
+  entities: [],
+  keySentences: [],
+  keyClaims: [],
+  ...(duplicateOfIssueId === undefined ? {} : { duplicateOfIssueId }),
+});
+
+describe('extractClaims 중복 보류', () => {
+  it('중복 쌍은 하나만 추출한다', async () => {
+    const base = seed();
+    const { db, prisma } = createFakePrismaClient({
+      ...base,
+      issues: [
+        createClassifiedIssueRow({
+          id: 'issue-1',
+          question: '정년을 65세로 연장해야 할까?',
+          classification: classificationOf(),
+        }),
+        createClassifiedIssueRow({
+          id: 'issue-dup',
+          question: '정년 연장을 도입해야 할까?',
+          classification: classificationOf('issue-1'),
+        }),
+      ],
+      articles: [
+        ...(base.articles ?? []),
+        createFakeArticleRow({ id: 'a4', issueId: 'issue-dup' }),
+      ],
+    });
+
+    const result = await extractClaims({ prisma, textClient: createTextClient() });
+
+    expect(result).toEqual({ extracted: 1, skipped: 1, failed: [] });
+    expect(db.claims.every((claim) => claim.issueId === 'issue-1')).toBe(true);
+  });
+
+  it('issueId 를 지정하면 중복이어도 추출한다', async () => {
+    const base = seed();
+    const { db, prisma } = createFakePrismaClient({
+      ...base,
+      issues: [
+        createClassifiedIssueRow({
+          id: 'issue-1',
+          question: '정년을 65세로 연장해야 할까?',
+          classification: classificationOf(),
+        }),
+        createClassifiedIssueRow({
+          id: 'issue-dup',
+          question: '정년 연장을 도입해야 할까?',
+          classification: classificationOf('issue-1'),
+        }),
+      ],
+      articles: [
+        ...(base.articles ?? []),
+        createFakeArticleRow({ id: 'a4', issueId: 'issue-dup' }),
+      ],
+    });
+
+    const result = await extractClaims({
+      prisma,
+      textClient: createTextClient(),
+      issueId: 'issue-dup',
+    });
+
+    expect(result.extracted).toBe(1);
+    expect(db.claims.every((claim) => claim.issueId === 'issue-dup')).toBe(true);
+  });
+});
