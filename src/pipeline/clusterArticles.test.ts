@@ -278,4 +278,19 @@ describe('clusterArticles', () => {
 
     expect(findManyCalls.every((call) => (call.args as { take?: number }).take === 500)).toBe(true);
   });
+
+  it('NULL embedding을 방어하는 $executeRaw를 매번 호출한다', async () => {
+    const { prisma, calls } = createFakePrismaClient({
+      articles: [article({ id: 'a1', embedding: [1, 0] })],
+    });
+
+    await clusterArticles({
+      prisma,
+      embeddingClient: createFakeEmbeddingClient(),
+      now: NOW,
+    });
+
+    const executeRawCalls = calls.filter((call) => call.model === '$executeRaw' && call.method === 'call');
+    expect(executeRawCalls).toHaveLength(1);
+  });
 });

@@ -256,7 +256,9 @@ const matchesArticle = (article: FakeArticleRow, where: ArticleWhere | undefined
     return false;
   }
 
-  if (where.embedding?.isEmpty === true && article.embedding.length > 0) {
+  // 실제 Postgres 동작: embedding IS NULL || cardinality(embedding) = 0
+  // NULL이나 undefined는 isEmpty 필터에 매칭되지 않음
+  if (where.embedding?.isEmpty === true && (article.embedding === null || article.embedding === undefined || article.embedding.length > 0)) {
     return false;
   }
 
@@ -515,6 +517,11 @@ export const createFakePrismaClient = (seed: Partial<FakeDatabase> = {}): FakePr
       }
 
       return Promise.all(arg as Promise<unknown>[]);
+    },
+    $executeRaw: async () => {
+      record('$executeRaw', 'call', {});
+
+      return 0;
     },
     $disconnect: async () => undefined,
   };

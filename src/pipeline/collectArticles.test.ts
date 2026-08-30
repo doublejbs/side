@@ -179,4 +179,20 @@ describe('collectArticles', () => {
 
     expect(newsClient.calls).toEqual([['예산안', { display: 1, start: 1 }]]);
   });
+
+  it('createMany에 전달되는 각 행에 embedding: [] 이 명시된다', async () => {
+    const { prisma, calls } = createPrisma();
+    const newsClient = createFakeNewsClient([[item(), item({ link: 'https://n.news.naver.com/article/2' })]]);
+
+    await collectArticles({ prisma, newsClient, pagesPerQuery: 1, display: 100 });
+
+    // article.createMany 호출 기록에서 embedding 필드 확인
+    const createManyCalls = calls.filter((call) => call.model === 'article' && call.method === 'createMany');
+    expect(createManyCalls).toHaveLength(1);
+
+    const createManyArgs = createManyCalls[0].args as { data: Array<{ embedding?: number[] }> };
+    createManyArgs.data.forEach((row) => {
+      expect(row.embedding).toEqual([]);
+    });
+  });
 });

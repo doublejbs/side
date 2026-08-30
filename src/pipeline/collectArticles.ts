@@ -32,6 +32,7 @@ interface ArticleRow {
   description: string;
   publisher: string;
   publishedAt: Date;
+  embedding: number[];
 }
 
 const DEFAULT_PAGES_PER_QUERY = 3;
@@ -119,6 +120,7 @@ export const collectArticles = async (deps: CollectArticlesDeps): Promise<Collec
           description: stripHtml(item.description),
           publisher: resolvePublisher(item, nameByDomain),
           publishedAt,
+          embedding: [],
         });
       });
 

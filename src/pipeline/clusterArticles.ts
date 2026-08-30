@@ -98,6 +98,10 @@ export const clusterArticles = async (deps: ClusterArticlesDeps): Promise<Cluste
   let dimension = deps.expectedDimension;
   let skippedDimension = 0;
 
+  // 과거 데이터·외부 삽입에서 embedding이 NULL로 들어간 행을 방어
+  // Prisma 스칼라 리스트는 null 비교를 지원하지 않으므로, 조회 전에 NULL을 []로 정규화
+  await prisma.$executeRaw`UPDATE "Article" SET embedding = '{}' WHERE embedding IS NULL`;
+
   // (a) 임베딩이 비어 있는 기사부터 채운다.
   const pending = await prisma.article.findMany({
     where: { embedding: { isEmpty: true } },
