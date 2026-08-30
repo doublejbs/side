@@ -304,6 +304,13 @@ Repository `Settings` → `Secrets and variables` → `Variables`에서 설정�
    gh secret list
    ```
 
+
+#### Supabase 연결 문자열 주의 (2026-08-30 실검증)
+- `prisma migrate deploy`는 **Transaction pooler(6543, `pgbouncer=true`)에서 멈춘다**(트랜잭션 모드는 prepared statement·advisory lock 미지원). `DATABASE_URL` 시크릿은 **Session pooler(5432)** URI를 쓴다: `postgresql://postgres.<ref>:<pw>@aws-0-<region>.pooler.supabase.com:5432/postgres?connection_limit=5`
+- `connection_limit=5`는 세션 풀러의 클라이언트 한도(15)를 넘지 않게 Prisma 풀을 제한한다(시드가 매체 22곳을 병렬 upsert하다 `EMAXCONNSESSION`이 났음).
+- `gh workflow run pipeline.yml`은 워크플로우가 기본 브랜치(main)에 있어야 동작한다.
+- 워크플로우 `--dry-run`은 원격 DB에도 가짜 임베딩을 기록하므로 운영 DB에서는 실행하지 않는다(실행했다면 `UPDATE "Article" SET embedding='{}' …`로 초기화).
+
 ## 5. 관리자 검수 `/admin`
 
 - 로그인 `/admin/login`: 폼 → 서버 액션이 `ADMIN_PASSWORD` 비교 → `side_admin` HttpOnly 쿠키(HMAC 서명, `ANON_COOKIE_SECRET` 사용, 12시간). `src/proxy.ts`(Next 16의 middleware 대체 파일명)에서 `/admin/**` 보호.
