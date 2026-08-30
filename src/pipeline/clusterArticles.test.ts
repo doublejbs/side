@@ -85,6 +85,7 @@ describe('clusterArticles', () => {
       created: 0,
       deferred: 0,
       skippedDimension: 0,
+      centroidBackfilled: 0,
     });
     expect(db.articles[1].issueId).toBe('seed-1');
     expect(db.issues[0].centroid).toEqual([0.8, 0.4]);
@@ -134,6 +135,7 @@ describe('clusterArticles', () => {
       created: 1,
       deferred: 1,
       skippedDimension: 0,
+      centroidBackfilled: 0,
     });
     expect(db.issues).toHaveLength(1);
     expect(db.issues[0]).toMatchObject({
@@ -173,6 +175,7 @@ describe('clusterArticles', () => {
       created: 0,
       deferred: 2,
       skippedDimension: 0,
+      centroidBackfilled: 0,
     });
     expect(db.issues).toHaveLength(0);
     expect(db.articles.every((row) => row.issueId === null)).toBe(true);
@@ -237,6 +240,7 @@ describe('clusterArticles', () => {
       created: 0,
       deferred: 1,
       skippedDimension: 0,
+      centroidBackfilled: 0,
     });
   });
 
@@ -292,5 +296,71 @@ describe('clusterArticles', () => {
 
     const executeRawCalls = calls.filter((call) => call.model === '$executeRaw' && call.method === 'call');
     expect(executeRawCalls).toHaveLength(1);
+  });
+  it('centroid 가 빈 이슈를 연결 기사 임베딩 평균으로 보정한다', async () => {
+    const { prisma, db } = createFakePrismaClient({
+      issues: [issue({ id: 'seed-1', status: IssueStatus.PUBLISHED, centroid: [] })],
+      articles: [
+        article({ id: 'a1', embedding: [1, 0], issueId: 'seed-1' }),
+        article({ id: 'a2', embedding: [0, 1], issueId: 'seed-1' }),
+      ],
+    });
+
+    const result = await clusterArticles({
+      prisma,
+      embeddingClient: createFakeEmbeddingClient(),
+      now: NOW,
+    });
+
+    expect(result.centroidBackfilled).toBe(1);
+    expect(db.issues[0].centroid).toEqual([0.5, 0.5]);
+  });
+
+  it('임베딩 있는 기사가 없으면 centroid 를 그대로 둔다', async () => {
+    const { prisma, db } = createFakePrismaClient({
+      issues: [issue({ id: 'seed-1', status: IssueStatus.REVIEW, centroid: [] })],
+      articles: [article({ id: 'a1', title: '알 수 없음', embedding: [], issueId: 'seed-1' })],
+    });
+
+    const result = await clusterArticles({
+      prisma,
+      embeddingClient: createFakeEmbeddingClient(),
+      now: NOW,
+    });
+
+    expect(result.centroidBackfilled).toBe(0);
+    expect(db.issues[0].centroid).toEqual([]);
+  });
+
+  it('반려된 이슈의 centroid 는 보정하지 않는다', async () => {
+    const { prisma, db } = createFakePrismaClient({
+      issues: [issue({ id: 'seed-1', status: IssueStatus.REJECTED, centroid: [] })],
+      articles: [article({ id: 'a1', embedding: [1, 0], issueId: 'seed-1' })],
+    });
+
+    const result = await clusterArticles({
+      prisma,
+      embeddingClient: createFakeEmbeddingClient(),
+      now: NOW,
+    });
+
+    expect(result.centroidBackfilled).toBe(0);
+    expect(db.issues[0].centroid).toEqual([]);
+  });
+
+  it('이미 centroid 가 있는 이슈는 다시 계산하지 않는다', async () => {
+    const { prisma, db } = createFakePrismaClient({
+      issues: [issue({ id: 'seed-1', status: IssueStatus.PUBLISHED, centroid: [1, 0] })],
+      articles: [article({ id: 'a1', embedding: [0, 1], issueId: 'seed-1' })],
+    });
+
+    const result = await clusterArticles({
+      prisma,
+      embeddingClient: createFakeEmbeddingClient(),
+      now: NOW,
+    });
+
+    expect(result.centroidBackfilled).toBe(0);
+    expect(db.issues[0].centroid).toEqual([1, 0]);
   });
 });

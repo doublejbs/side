@@ -119,6 +119,7 @@ interface IssueWhere {
   createdAt?: { gte?: Date };
   debateScore?: { gte?: number };
   verifiedAt?: null | { not?: null };
+  centroid?: { isEmpty?: boolean };
   articles?: { some?: { publishedAt?: { gte?: Date } } };
 }
 
@@ -254,6 +255,14 @@ const matchesIssue = (
   }
 
   if (where.verifiedAt && where.verifiedAt.not === null && issue.verifiedAt === null) {
+    return false;
+  }
+
+  if (where.centroid?.isEmpty === true && issue.centroid.length > 0) {
+    return false;
+  }
+
+  if (where.centroid?.isEmpty === false && issue.centroid.length === 0) {
     return false;
   }
 
@@ -547,10 +556,10 @@ export const createFakePrismaClient = (seed: Partial<FakeDatabase> = {}): FakePr
         record('evidence', 'createMany', { data });
 
         data.forEach((input: unknown) => {
-          const evidence = input as { type: string; source: string; date: Date; summary: string; url: string; articleId?: string | null; article?: { connect: { id: string } }; claim?: { connect: { id: string } } };
+          const evidence = input as { type: string; source: string; date: Date; summary: string; url: string; articleId?: string | null; claimId?: string; article?: { connect: { id: string } }; claim?: { connect: { id: string } } };
           db.evidences.push({
             id: nextId('evidence'),
-            claimId: evidence.claim?.connect.id ?? '',
+            claimId: evidence.claimId ?? evidence.claim?.connect.id ?? '',
             type: evidence.type,
             source: evidence.source,
             date: evidence.date,

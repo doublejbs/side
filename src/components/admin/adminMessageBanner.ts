@@ -27,6 +27,10 @@ const CONTENT: Record<AdminMessage, AdminBannerContent> = {
     tone: AdminBannerTone.SUCCESS,
     text: '요약과 논점을 다시 생성했습니다.',
   },
+  [AdminMessage.MERGED]: {
+    tone: AdminBannerTone.SUCCESS,
+    text: '병합했습니다. 기사를 옮기고 원본 이슈는 반려했습니다.',
+  },
   [AdminMessage.QUERY_SAVED]: { tone: AdminBannerTone.SUCCESS, text: '키워드를 저장했습니다.' },
   [AdminMessage.PUBLISHER_SAVED]: { tone: AdminBannerTone.SUCCESS, text: '매체를 저장했습니다.' },
   [AdminMessage.PUBLISHER_DELETED]: {
@@ -84,6 +88,22 @@ const CONTENT: Record<AdminMessage, AdminBannerContent> = {
   [AdminMessage.ERROR_REGENERATE_FAILED]: {
     tone: AdminBannerTone.ERROR,
     text: '다시 생성에 실패했습니다. 서버 로그를 확인해 주세요.',
+  },
+  [AdminMessage.ERROR_MERGE_SELF]: {
+    tone: AdminBannerTone.ERROR,
+    text: '자기 자신에는 병합할 수 없습니다.',
+  },
+  [AdminMessage.ERROR_MERGE_TARGET_NOT_FOUND]: {
+    tone: AdminBannerTone.ERROR,
+    text: '병합할 대상 이슈를 선택해 주세요.',
+  },
+  [AdminMessage.ERROR_MERGE_TARGET_REJECTED]: {
+    tone: AdminBannerTone.ERROR,
+    text: '반려·자동 제외된 이슈에는 병합할 수 없습니다.',
+  },
+  [AdminMessage.ERROR_MERGE_SOURCE_PUBLISHED]: {
+    tone: AdminBannerTone.ERROR,
+    text: '발행된 이슈는 먼저 반려해야 병합할 수 있습니다.',
   },
   [AdminMessage.ERROR_UNKNOWN]: {
     tone: AdminBannerTone.ERROR,

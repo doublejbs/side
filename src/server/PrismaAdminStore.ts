@@ -20,7 +20,12 @@ import type { EvidenceSupport } from '@/domain/EvidenceSupport';
 import type { KeyPoint, MediaPerspective, OpinionGroup } from '@/domain/Issue';
 import type { IssueClassification } from '@/domain/IssueClassification';
 import { IssueStatus } from '@/domain/IssueStatus';
+import { computeCentroid } from '@/pipeline/computeCentroid';
+import { PIPELINE_TRANSACTION_OPTIONS } from '@/pipeline/transactionOptions';
+import { AdminActionError } from '@/server/AdminActionError';
+import { AdminMessage } from '@/server/AdminMessage';
 import {
+  MERGE_TARGET_WINDOW_DAYS,
   RESTORED_DEBATE_SCORE,
   type AdminClaimPatch,
   type AdminClaimPatchEntry,
@@ -28,11 +33,17 @@ import {
   type AdminIssueDetail,
   type AdminIssueListItem,
   type AdminIssuePatch,
+  type AdminMergeTarget,
   type AdminPublisher,
   type AdminPublisherInput,
   type AdminSearchQuery,
   type AdminStore,
 } from '@/server/AdminStore';
+import {
+  appendReviewNote,
+  mergedSourceNote,
+  mergedTargetNote,
+} from '@/server/mergeReviewNotes';
 
 /** Json 컬럼은 검증에 실패하면 폼이 깨지지 않도록 빈 배열로 떨어뜨린다. */
 const parseKeyPoints = (value: unknown): KeyPoint[] => {
@@ -65,6 +76,37 @@ const parseEvidenceSupport = (value: string | null): EvidenceSupport | null =>
   value === null ? null : toDomainEvidenceSupport(value);
 
 const toJson = (value: unknown): Prisma.InputJsonValue => value as Prisma.InputJsonValue;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** 병합 대상으로 고를 수 있는 상태. 반려·자동 제외 이슈에는 기사를 옮기지 않는다. */
+const MERGE_TARGET_STATUSES = [
+  PrismaIssueStatus.DRAFT,
+  PrismaIssueStatus.REVIEW,
+  PrismaIssueStatus.PUBLISHED,
+];
+
+/** 트랜잭션 안팎에서 같은 규칙으로 쓰도록 클라이언트를 받는다. */
+type CentroidClient = Pick<PrismaClient, 'article' | 'issue'>;
+
+/**
+ * 연결 기사 임베딩 평균으로 centroid 를 다시 쓴다.
+ * 쓸 수 있는 임베딩이 없으면 저장된 값을 지우지 않고 그대로 둔다.
+ */
+const recomputeCentroidWith = async (client: CentroidClient, issueId: string): Promise<void> => {
+  const articles = await client.article.findMany({
+    where: { issueId, embedding: { isEmpty: false } },
+    select: { embedding: true },
+  });
+
+  const centroid = computeCentroid(articles.map((article) => article.embedding));
+
+  if (centroid.length === 0) {
+    return;
+  }
+
+  await client.issue.update({ where: { id: issueId }, data: { centroid } });
+};
 
 /** 검수 폼은 기사 원문 링크를 최신순으로만 보여 준다. 전부 실어 오면 응답이 지나치게 커진다. */
 const ARTICLE_TAKE = 200;
@@ -292,6 +334,82 @@ export class PrismaAdminStore implements AdminStore {
       where: { id },
       data: { status: PrismaIssueStatus.DRAFT, debateScore: RESTORED_DEBATE_SCORE },
     });
+  }
+
+  async recomputeCentroid(issueId: string): Promise<void> {
+    await recomputeCentroidWith(this.prisma, issueId);
+  }
+
+  async hasCentroid(issueId: string): Promise<boolean> {
+    const row = await this.prisma.issue.findUnique({
+      where: { id: issueId },
+      select: { centroid: true },
+    });
+
+    return (row?.centroid.length ?? 0) > 0;
+  }
+
+  /**
+   * 병합. 기사 이동·원본 반려·양쪽 메모·대상 centroid 재계산이 함께 반영되거나 함께 실패해야 한다.
+   * 원본 주장(근거·피드백 cascade)은 지우지 않고 원본에 남긴다.
+   * 근거: `docs/PipelineTieringSpec.md` 11.2.
+   */
+  async mergeIssue(sourceId: string, targetId: string): Promise<{ movedArticles: number }> {
+    return this.prisma.$transaction(async (tx) => {
+      const [source, target] = await Promise.all([
+        tx.issue.findUnique({ where: { id: sourceId }, select: { question: true, reviewNote: true } }),
+        tx.issue.findUnique({ where: { id: targetId }, select: { question: true, reviewNote: true } }),
+      ]);
+
+      if (!source || !target) {
+        throw new AdminActionError(AdminMessage.ERROR_NOT_FOUND);
+      }
+
+      const moved = await tx.article.updateMany({
+        where: { issueId: sourceId },
+        data: { issueId: targetId },
+      });
+
+      await tx.issue.update({
+        where: { id: sourceId },
+        data: {
+          status: PrismaIssueStatus.REJECTED,
+          reviewNote: appendReviewNote(source.reviewNote, mergedSourceNote(target.question)),
+        },
+      });
+
+      await tx.issue.update({
+        where: { id: targetId },
+        data: {
+          reviewNote: appendReviewNote(
+            target.reviewNote,
+            mergedTargetNote(source.question, moved.count),
+          ),
+        },
+      });
+
+      await recomputeCentroidWith(tx, targetId);
+
+      return { movedArticles: moved.count };
+    }, PIPELINE_TRANSACTION_OPTIONS);
+  }
+
+  async listMergeTargets(excludeIssueId: string): Promise<AdminMergeTarget[]> {
+    const rows = await this.prisma.issue.findMany({
+      where: {
+        id: { not: excludeIssueId },
+        status: { in: MERGE_TARGET_STATUSES },
+        createdAt: { gte: new Date(Date.now() - MERGE_TARGET_WINDOW_DAYS * DAY_MS) },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, question: true, status: true },
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      question: row.question,
+      status: toDomainIssueStatus(row.status),
+    }));
   }
 
   async listQueries(): Promise<AdminSearchQuery[]> {

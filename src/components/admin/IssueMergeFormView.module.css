@@ -1,0 +1,12 @@
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.hint {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}

@@ -46,6 +46,7 @@ import {
   addSearchQuery,
   assertReviewable,
   deleteEvidence,
+  mergeIssue,
   publishIssue,
   rejectIssue,
   restoreIssue,
@@ -248,6 +249,26 @@ export const publishIssueAction = async (formData: FormData): Promise<void> => {
 
     return AdminMessage.PUBLISHED;
   });
+
+  redirect(issuePath(issueId, message));
+};
+
+/**
+ * 중복 이슈 병합. 성공하면 기사를 받은 대상 이슈 검수 화면으로 보낸다.
+ * 근거: `docs/PipelineTieringSpec.md` 11.2.
+ */
+export const mergeIssueAction = async (formData: FormData): Promise<void> => {
+  const issueId = readText(formData, AdminFormField.ISSUE_ID);
+  const targetIssueId = readText(formData, AdminFormField.TARGET_ISSUE_ID);
+  const message = await runAction(async (store) => {
+    await mergeIssue(store, issueId, targetIssueId);
+
+    return AdminMessage.MERGED;
+  });
+
+  if (message === AdminMessage.MERGED) {
+    redirect(issuePath(targetIssueId, message));
+  }
 
   redirect(issuePath(issueId, message));
 };

@@ -4,7 +4,11 @@ import { IssueStatus } from '@/domain/IssueStatus';
 import { MediaLeaning } from '@/domain/MediaLeaning';
 import { AdminActionError } from '@/server/AdminActionError';
 import { AdminMessage } from '@/server/AdminMessage';
-import { RESTORED_DEBATE_SCORE, type AdminIssueDetail } from '@/server/AdminStore';
+import {
+  RESTORED_DEBATE_SCORE,
+  type AdminArticle,
+  type AdminIssueDetail,
+} from '@/server/AdminStore';
 import { InMemoryAdminStore } from '@/server/InMemoryAdminStore';
 import { PUBLIC_PAGE_TARGETS, type PublicPageTarget } from '@/server/PublicPageTargets';
 
@@ -12,6 +16,7 @@ import {
   addSearchQuery,
   assertReviewable,
   deleteEvidence,
+  mergeIssue,
   parseLineList,
   parseTagList,
   publishIssue,
@@ -66,6 +71,15 @@ const createIssue = (overrides: Partial<AdminIssueDetail> = {}): AdminIssueDetai
   ],
   articles: [],
   ...overrides,
+});
+
+const createArticle = (id: string, embedding: number[]): AdminArticle => ({
+  id,
+  title: `기사 ${id}`,
+  publisher: '예시일보',
+  originalLink: `https://news.example/${id}`,
+  publishedAt: new Date('2026-01-01T00:00:00.000Z'),
+  embedding,
 });
 
 const createSaveInput = (overrides: Partial<SaveIssueInput> = {}): SaveIssueInput => ({
@@ -614,5 +628,155 @@ describe('restoreIssue', () => {
     await expect(restoreIssue(store, 'issue-404')).rejects.toThrow(
       new AdminActionError(AdminMessage.ERROR_NOT_FOUND),
     );
+  });
+});
+
+describe('publishIssue centroid', () => {
+  it('centroid 가 비어 있으면 연결 기사 임베딩 평균으로 채운다', async () => {
+    const store = new InMemoryAdminStore({
+      issues: [
+        createIssue({
+          articles: [createArticle('a1', [1, 0]), createArticle('a2', [0, 1])],
+        }),
+      ],
+    });
+
+    await publishIssue(store, 'issue-1');
+
+    expect((await store.getIssue('issue-1'))?.centroid).toEqual([0.5, 0.5]);
+  });
+
+  it('이미 centroid 가 있으면 다시 계산하지 않는다', async () => {
+    const store = new InMemoryAdminStore({
+      issues: [createIssue({ centroid: [1, 0], articles: [createArticle('a1', [0, 1])] })],
+    });
+
+    await publishIssue(store, 'issue-1');
+
+    expect((await store.getIssue('issue-1'))?.centroid).toEqual([1, 0]);
+  });
+
+  it('임베딩 있는 기사가 없으면 centroid 를 그대로 둔다', async () => {
+    const store = new InMemoryAdminStore({ issues: [createIssue()] });
+
+    await publishIssue(store, 'issue-1');
+
+    expect((await store.getIssue('issue-1'))?.centroid).toBeUndefined();
+  });
+});
+
+describe('mergeIssue', () => {
+  const createMergeStore = (
+    sourceOverrides: Partial<AdminIssueDetail> = {},
+    targetOverrides: Partial<AdminIssueDetail> = {},
+  ) =>
+    new InMemoryAdminStore({
+      issues: [
+        createIssue({
+          id: 'source',
+          status: IssueStatus.DRAFT,
+          question: '원본 질문',
+          articles: [createArticle('a1', [1, 0]), createArticle('a2', [0, 1])],
+          ...sourceOverrides,
+        }),
+        createIssue({
+          id: 'target',
+          status: IssueStatus.REVIEW,
+          question: '대상 질문',
+          articles: [],
+          ...targetOverrides,
+        }),
+      ],
+    });
+
+  it('기사를 대상으로 옮기고 원본을 반려하며 양쪽 메모와 centroid 를 남긴다', async () => {
+    const store = createMergeStore();
+
+    const result = await mergeIssue(store, 'source', 'target');
+
+    const source = await store.getIssue('source');
+    const target = await store.getIssue('target');
+
+    expect(result).toEqual({ movedArticles: 2 });
+    expect(source?.articles).toEqual([]);
+    expect(source?.status).toBe(IssueStatus.REJECTED);
+    expect(source?.reviewNote).toBe('[병합됨 → 대상 질문]');
+    expect(target?.articles.map((article) => article.id)).toEqual(['a1', 'a2']);
+    expect(target?.reviewNote).toBe('[병합 수신 ← 원본 질문, 기사 2건]');
+    expect(target?.centroid).toEqual([0.5, 0.5]);
+  });
+
+  it('원본 주장은 지우지 않고 원본에 남긴다', async () => {
+    const store = createMergeStore();
+
+    await mergeIssue(store, 'source', 'target');
+
+    expect((await store.getIssue('source'))?.claims).toHaveLength(1);
+  });
+
+  it('기존 검수 메모는 지우지 않고 줄을 덧붙인다', async () => {
+    const store = createMergeStore({ reviewNote: '[중복 가능] 대상 질문' });
+
+    await mergeIssue(store, 'source', 'target');
+
+    expect((await store.getIssue('source'))?.reviewNote).toBe(
+      '[중복 가능] 대상 질문\n[병합됨 → 대상 질문]',
+    );
+  });
+
+  it('자기 자신에는 병합할 수 없다', async () => {
+    const store = createMergeStore();
+
+    await expect(mergeIssue(store, 'source', 'source')).rejects.toThrow(
+      new AdminActionError(AdminMessage.ERROR_MERGE_SELF),
+    );
+  });
+
+  it('반려된 이슈에는 병합할 수 없다', async () => {
+    const store = createMergeStore({}, { status: IssueStatus.REJECTED });
+
+    await expect(mergeIssue(store, 'source', 'target')).rejects.toThrow(
+      new AdminActionError(AdminMessage.ERROR_MERGE_TARGET_REJECTED),
+    );
+  });
+
+  it('자동 제외된 이슈에는 병합할 수 없다', async () => {
+    const store = createMergeStore({}, { status: IssueStatus.AUTO_REJECTED });
+
+    await expect(mergeIssue(store, 'source', 'target')).rejects.toThrow(
+      new AdminActionError(AdminMessage.ERROR_MERGE_TARGET_REJECTED),
+    );
+  });
+
+  it('발행된 이슈는 먼저 반려해야 병합할 수 있다', async () => {
+    const store = createMergeStore({ status: IssueStatus.PUBLISHED });
+
+    await expect(mergeIssue(store, 'source', 'target')).rejects.toThrow(
+      new AdminActionError(AdminMessage.ERROR_MERGE_SOURCE_PUBLISHED),
+    );
+  });
+
+  it('없는 대상에는 병합할 수 없다', async () => {
+    const store = createMergeStore();
+
+    await expect(mergeIssue(store, 'source', 'missing')).rejects.toThrow(
+      new AdminActionError(AdminMessage.ERROR_MERGE_TARGET_NOT_FOUND),
+    );
+  });
+
+  it('없는 원본이면 찾을 수 없다고 알린다', async () => {
+    const store = createMergeStore();
+
+    await expect(mergeIssue(store, 'missing', 'target')).rejects.toThrow(
+      new AdminActionError(AdminMessage.ERROR_NOT_FOUND),
+    );
+  });
+
+  it('병합이 막히면 기사를 옮기지 않는다', async () => {
+    const store = createMergeStore({ status: IssueStatus.PUBLISHED });
+
+    await expect(mergeIssue(store, 'source', 'target')).rejects.toThrow(AdminActionError);
+    expect((await store.getIssue('source'))?.articles).toHaveLength(2);
+    expect((await store.getIssue('target'))?.articles).toHaveLength(0);
   });
 });

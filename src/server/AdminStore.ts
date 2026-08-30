@@ -13,6 +13,12 @@ import type { MediaLeaning } from '@/domain/MediaLeaning';
  */
 export const RESTORED_DEBATE_SCORE = 100;
 
+/**
+ * 병합 대상 후보로 보여 줄 이슈의 최근 기간(일).
+ * 근거: `docs/PipelineTieringSpec.md` 11.2.
+ */
+export const MERGE_TARGET_WINDOW_DAYS = 30;
+
 /** 검수 목록의 한 행. */
 export interface AdminIssueListItem {
   id: string;
@@ -58,6 +64,18 @@ export interface AdminArticle {
   publisher: string | null;
   originalLink: string;
   publishedAt: Date;
+  /**
+   * 기사 임베딩. 검수 화면으로는 내려보내지 않는다(1536차원이라 응답이 지나치게 커진다).
+   * 인메모리 구현이 centroid 재계산을 흉내 내는 데만 쓴다.
+   */
+  embedding?: number[];
+}
+
+/** 병합 대상 `<select>` 한 항목. */
+export interface AdminMergeTarget {
+  id: string;
+  question: string;
+  status: IssueStatus;
 }
 
 /** 검수 폼이 필요로 하는 이슈 전체. */
@@ -85,6 +103,11 @@ export interface AdminIssueDetail {
   publishedAt: Date | null;
   claims: AdminClaim[];
   articles: AdminArticle[];
+  /**
+   * 클러스터 중심 임베딩. `AdminArticle.embedding` 과 같은 이유로 Prisma 구현은 채우지 않는다.
+   * 인메모리 구현이 centroid 재계산을 흉내 내는 데만 쓴다.
+   */
+  centroid?: number[];
 }
 
 /** 검수 폼이 저장하는 이슈 필드. 넘기지 않은 필드는 그대로 둔다. */
@@ -159,6 +182,23 @@ export interface AdminStore {
    * 판단 근거가 남도록 `reviewNote` 와 `classifiedAt` 은 지우지 않는다.
    */
   restoreIssue(id: string): Promise<void>;
+  /**
+   * 연결 기사 중 임베딩이 있는 것들의 평균으로 centroid 를 다시 계산한다.
+   * 임베딩 있는 기사가 하나도 없으면 저장된 centroid 를 그대로 둔다.
+   * 근거: `docs/PipelineTieringSpec.md` 11.1.
+   */
+  recomputeCentroid(issueId: string): Promise<void>;
+  /** centroid 가 이미 계산돼 있는지. 승인 시 한 번만 계산하려고 먼저 묻는다. */
+  hasCentroid(issueId: string): Promise<boolean>;
+  /**
+   * 중복 이슈 병합. 원본 기사를 대상으로 옮기고, 원본은 반려 처리한 뒤
+   * 양쪽 `reviewNote` 에 흔적을 남기고 대상 centroid 를 다시 계산한다.
+   * 원본 주장·근거는 지우지 않고 원본에 남긴다.
+   * 근거: `docs/PipelineTieringSpec.md` 11.2.
+   */
+  mergeIssue(sourceId: string, targetId: string): Promise<{ movedArticles: number }>;
+  /** 병합 대상 후보(최근 30일 DRAFT·REVIEW·PUBLISHED). 자기 자신은 뺀다. */
+  listMergeTargets(excludeIssueId: string): Promise<AdminMergeTarget[]>;
   listQueries(): Promise<AdminSearchQuery[]>;
   createQuery(keyword: string): Promise<void>;
   setQueryActive(id: string, isActive: boolean): Promise<void>;

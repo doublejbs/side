@@ -323,6 +323,7 @@ Repository `Settings` → `Secrets and variables` → `Variables`에서 설정�
   - 언론 관점 3개 프레임·키워드·대표 기사 편집, 공통 내용 편집
   - 의견 그룹 3개 편집
   - 버튼: **저장**, **승인(PUBLISHED, slug 생성)**, **반려(REJECTED + 메모)**, **요약 다시 생성**, 자동 제외·반려 상태에서만 **검수 대상으로 복원**(→ DRAFT, `debateScore=100`, `reviewNote`·`classifiedAt` 유지 — `docs/PipelineTieringSpec.md` 5장)
+  - **병합**: 최근 30일 DRAFT·REVIEW·PUBLISHED 이슈를 골라 기사만 옮기고 이 이슈는 반려 처리한다(발행된 이슈는 먼저 반려해야 병합 가능 — `docs/PipelineTieringSpec.md` 11.2)
 - **요약 다시 생성**(`regenerateIssue.ts`)의 규칙:
   - `status`가 `DRAFT`·`REVIEW`가 아니면 `RegenerateNotAllowedError`를 던진다. 이미 공개·반려된 이슈의 주장을 말없이 갈아 끼우지 않는다. 화면에서도 그 상태에서는 버튼을 비활성으로 두고 이유를 적는다.
   - 먼저 LLM 결과(요약·논점)를 **메모리로** 모두 받아 검증하고, 성공했을 때만 한 트랜잭션에서 기존 주장 삭제 → 새 주장 저장 → 이슈 갱신 → `status=REVIEW`를 한다. 실패하면 DB는 전혀 바뀌지 않는다.

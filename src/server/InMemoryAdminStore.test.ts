@@ -293,3 +293,110 @@ describe('InMemoryAdminStore.restoreIssue', () => {
     expect((await store.getIssue('issue-1'))?.status).toBe(IssueStatus.REVIEW);
   });
 });
+
+describe('InMemoryAdminStore centroid · 병합', () => {
+  const article = (id: string, embedding?: number[]) => ({
+    id,
+    title: `기사 ${id}`,
+    publisher: '매체',
+    originalLink: `https://example.com/${id}`,
+    publishedAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...(embedding === undefined ? {} : { embedding }),
+  });
+
+  it('연결 기사 임베딩 평균으로 centroid 를 다시 쓴다', async () => {
+    const store = new InMemoryAdminStore({
+      issues: [createIssue({ articles: [article('a1', [1, 0]), article('a2', [0, 1])] })],
+    });
+
+    await store.recomputeCentroid('issue-1');
+
+    expect((await store.getIssue('issue-1'))?.centroid).toEqual([0.5, 0.5]);
+    expect(await store.hasCentroid('issue-1')).toBe(true);
+  });
+
+  it('임베딩 있는 기사가 없으면 centroid 를 그대로 둔다', async () => {
+    const store = new InMemoryAdminStore({
+      issues: [createIssue({ centroid: [1, 0], articles: [article('a1')] })],
+    });
+
+    await store.recomputeCentroid('issue-1');
+
+    expect((await store.getIssue('issue-1'))?.centroid).toEqual([1, 0]);
+  });
+
+  it('없는 이슈면 아무 일도 하지 않는다', async () => {
+    const store = new InMemoryAdminStore({ issues: [createIssue()] });
+
+    await store.recomputeCentroid('missing');
+
+    expect(await store.hasCentroid('missing')).toBe(false);
+  });
+
+  it('병합하면 기사가 옮겨지고 원본은 반려된다', async () => {
+    const store = new InMemoryAdminStore({
+      issues: [
+        createIssue({
+          id: 'source',
+          question: '원본 질문',
+          articles: [article('a1', [1, 0]), article('a2', [0, 1])],
+        }),
+        createIssue({ id: 'target', question: '대상 질문', articles: [] }),
+      ],
+    });
+
+    const result = await store.mergeIssue('source', 'target');
+
+    expect(result).toEqual({ movedArticles: 2 });
+    expect((await store.getIssue('source'))?.status).toBe(IssueStatus.REJECTED);
+    expect((await store.getIssue('target'))?.centroid).toEqual([0.5, 0.5]);
+  });
+
+  it('없는 이슈를 병합하면 아무 것도 옮기지 않는다', async () => {
+    const store = new InMemoryAdminStore({ issues: [createIssue({ id: 'source' })] });
+
+    expect(await store.mergeIssue('source', 'missing')).toEqual({ movedArticles: 0 });
+    expect((await store.getIssue('source'))?.articles).toHaveLength(1);
+  });
+});
+
+describe('InMemoryAdminStore.listMergeTargets', () => {
+  const daysAgo = (days: number): Date => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  it('최근 30일 DRAFT·REVIEW·PUBLISHED 이슈만 최신순으로 돌려준다', async () => {
+    const store = new InMemoryAdminStore({
+      issues: [
+        createIssue({ id: 'draft', status: IssueStatus.DRAFT, createdAt: daysAgo(3) }),
+        createIssue({ id: 'review', status: IssueStatus.REVIEW, createdAt: daysAgo(1) }),
+        createIssue({ id: 'published', status: IssueStatus.PUBLISHED, createdAt: daysAgo(10) }),
+        createIssue({ id: 'rejected', status: IssueStatus.REJECTED, createdAt: daysAgo(1) }),
+        createIssue({
+          id: 'auto-rejected',
+          status: IssueStatus.AUTO_REJECTED,
+          createdAt: daysAgo(1),
+        }),
+        createIssue({ id: 'old', status: IssueStatus.DRAFT, createdAt: daysAgo(31) }),
+      ],
+    });
+
+    const targets = await store.listMergeTargets('none');
+
+    expect(targets.map((target) => target.id)).toEqual(['review', 'draft', 'published']);
+    expect(targets[0]).toEqual({
+      id: 'review',
+      question: '정년을 연장해야 할까?',
+      status: IssueStatus.REVIEW,
+    });
+  });
+
+  it('자기 자신은 후보에서 뺀다', async () => {
+    const store = new InMemoryAdminStore({
+      issues: [
+        createIssue({ id: 'self', createdAt: daysAgo(1) }),
+        createIssue({ id: 'other', createdAt: daysAgo(2) }),
+      ],
+    });
+
+    expect((await store.listMergeTargets('self')).map((target) => target.id)).toEqual(['other']);
+  });
+});

@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 
 import {
   deleteEvidenceAction,
+  mergeIssueAction,
   publishIssueAction,
   regenerateIssueAction,
   rejectIssueAction,
@@ -30,11 +31,14 @@ const AdminIssueReviewPage = async ({ params, searchParams }: Props) => {
 
   const { id } = await params;
   const { message } = await searchParams;
-  const issue = await getAdminStore().getIssue(id);
+  const store = getAdminStore();
+  const issue = await store.getIssue(id);
 
   if (!issue) {
     notFound();
   }
+
+  const mergeTargets = await store.listMergeTargets(id);
 
   const banner = toAdminBannerContent(message);
 
@@ -43,12 +47,14 @@ const AdminIssueReviewPage = async ({ params, searchParams }: Props) => {
       {banner ? <AdminBannerView tone={banner.tone}>{banner.text}</AdminBannerView> : null}
       <IssueReviewFormView
         issue={issue}
+        mergeTargets={mergeTargets}
         saveIssueAction={saveIssueAction}
         saveClaimAction={saveClaimAction}
         publishIssueAction={publishIssueAction}
         rejectIssueAction={rejectIssueAction}
         restoreIssueAction={restoreIssueAction}
         regenerateIssueAction={regenerateIssueAction}
+        mergeIssueAction={mergeIssueAction}
         updateEvidenceTypeAction={updateEvidenceTypeAction}
         deleteEvidenceAction={deleteEvidenceAction}
       />

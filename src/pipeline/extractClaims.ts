@@ -372,11 +372,20 @@ export const applyClaimsDraft = async (
         order: claim.order,
         title: claim.title,
         description: claim.description,
-        evidences: { create: claim.evidences },
       },
     });
 
     claimIds.push(created.id);
+
+    // 근거를 배치로 생성
+    if (claim.evidences.length > 0) {
+      await tx.evidence.createMany({
+        data: claim.evidences.map((evidence) => ({
+          ...evidence,
+          claimId: created.id,
+        })),
+      });
+    }
   }
 
   const reviewNote =
