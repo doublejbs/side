@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 
+import { decodeSlugParam } from '@/server/decodeRouteParam';
 import { getServerVoteContext } from '@/server/isServerVoteEnabled';
 import { readJsonBody, toRouteResponse } from '@/server/routeResponse';
 import { handleCastVote, serverVoteDisabledResponse } from '@/server/voteHandlers';
@@ -20,5 +21,7 @@ export const POST = async (request: Request, { params }: Context): Promise<Respo
   const cookieStore = await cookies();
   const body = await readJsonBody(request);
 
-  return toRouteResponse(await handleCastVote({ ...context, cookieStore, slug, body }));
+  return toRouteResponse(
+    await handleCastVote({ ...context, cookieStore, slug: decodeSlugParam(slug), body }),
+  );
 };

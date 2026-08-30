@@ -73,6 +73,23 @@ describe('createOpenAiTextClient', () => {
     expect(bodies[1].input[1].content).toContain('재시도');
   });
 
+  it('재시도 프롬프트에 직전 실패 사유를 담는다', async () => {
+    const stanceSchema = z.object({
+      question: z.string().refine((value) => value.includes('해야 할까'), {
+        message: '질문 형식 위반: 찬성/반대로 답할 수 있는 정책 질문이어야 한다',
+      }),
+    });
+    const { client, bodies } = createFakeOpenAi([
+      { output_parsed: { question: '금융노조 총파업 쟁점은?' } },
+      { output_parsed: { question: '주 4.5일제를 도입해야 할까?' } },
+    ]);
+    const textClient = createOpenAiTextClient({ apiKey: 'key', model: 'gpt-test', openaiClient: client });
+
+    await textClient.generateStructured({ ...request, schema: stanceSchema });
+
+    expect(bodies[1].input[1].content).toContain('실패 사유 — question: 질문 형식 위반');
+  });
+
   it('호출 자체가 실패해도 한 번 재시도한다', async () => {
     const { client, bodies } = createFakeOpenAi([new Error('429'), { output_parsed: { answer: '복구' } }]);
     const textClient = createOpenAiTextClient({ apiKey: 'key', model: 'gpt-test', openaiClient: client });

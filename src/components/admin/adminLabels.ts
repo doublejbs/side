@@ -1,3 +1,4 @@
+import { EvidenceSupport } from '@/domain/EvidenceSupport';
 import { EvidenceType } from '@/domain/EvidenceType';
 import { IssueStatus } from '@/domain/IssueStatus';
 import { MediaLeaning } from '@/domain/MediaLeaning';
@@ -7,6 +8,7 @@ export const ISSUE_STATUS_LABEL: Record<IssueStatus, string> = {
   [IssueStatus.REVIEW]: '검수 대기',
   [IssueStatus.PUBLISHED]: '발행됨',
   [IssueStatus.REJECTED]: '반려됨',
+  [IssueStatus.AUTO_REJECTED]: '자동 제외',
 };
 
 export const EVIDENCE_TYPE_LABEL: Record<EvidenceType, string> = {
@@ -14,6 +16,13 @@ export const EVIDENCE_TYPE_LABEL: Record<EvidenceType, string> = {
   [EvidenceType.RESEARCH]: '연구',
   [EvidenceType.EXPERT]: '전문가',
   [EvidenceType.CLAIM]: '주장',
+};
+
+export const EVIDENCE_SUPPORT_LABEL: Record<EvidenceSupport, string> = {
+  [EvidenceSupport.SUPPORTS]: '지지',
+  [EvidenceSupport.PARTIAL]: '부분',
+  [EvidenceSupport.UNRELATED]: '무관',
+  [EvidenceSupport.CONTRADICTS]: '반박',
 };
 
 export const MEDIA_LEANING_LABEL: Record<MediaLeaning, string> = {

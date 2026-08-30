@@ -31,7 +31,15 @@ const ISSUE_SELECT = {
       title: true,
       description: true,
       evidences: {
-        select: { id: true, type: true, source: true, date: true, summary: true, url: true },
+        select: {
+          id: true,
+          type: true,
+          source: true,
+          date: true,
+          summary: true,
+          url: true,
+          support: true,
+        },
         orderBy: { date: 'desc' },
       },
       _count: { select: { feedbacks: { where: { feedback: ClaimFeedback.PERSUADED } } } },

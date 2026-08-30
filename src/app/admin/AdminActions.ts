@@ -6,6 +6,7 @@ import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+import { IssueStatus } from '@/domain/IssueStatus';
 import { MEDIA_LEANING_ORDER } from '@/domain/mediaLeaningOrder';
 import { getOpinionGroupLabel } from '@/domain/opinionGroupPresenter';
 import { RegenerateNotAllowedError } from '@/pipeline/RegenerateNotAllowedError';
@@ -47,6 +48,7 @@ import {
   deleteEvidence,
   publishIssue,
   rejectIssue,
+  restoreIssue,
   saveClaim,
   saveIssue,
   savePublisher,
@@ -259,6 +261,25 @@ export const rejectIssueAction = async (formData: FormData): Promise<void> => {
 
     return AdminMessage.REJECTED;
   });
+
+  redirect(issuePath(issueId, message));
+};
+
+/**
+ * 자동 제외·반려된 이슈를 검수 대상으로 되돌린다.
+ * 성공하면 되돌아간 초안 목록으로 보내 오탐을 이어서 다룰 수 있게 한다.
+ */
+export const restoreIssueAction = async (formData: FormData): Promise<void> => {
+  const issueId = readText(formData, AdminFormField.ISSUE_ID);
+  const message = await runAction(async (store) => {
+    await restoreIssue(store, issueId);
+
+    return AdminMessage.RESTORED;
+  });
+
+  if (message === AdminMessage.RESTORED) {
+    redirect(`/admin?status=${IssueStatus.DRAFT}&message=${message}`);
+  }
 
   redirect(issuePath(issueId, message));
 };

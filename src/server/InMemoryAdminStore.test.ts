@@ -1,10 +1,25 @@
 import { ClaimSide } from '@/domain/ClaimSide';
+import { EvidenceSupport } from '@/domain/EvidenceSupport';
 import { EvidenceType } from '@/domain/EvidenceType';
+import type { IssueClassification } from '@/domain/IssueClassification';
 import { IssueStatus } from '@/domain/IssueStatus';
 import { MediaLeaning } from '@/domain/MediaLeaning';
-import type { AdminIssueDetail } from '@/server/AdminStore';
+import { RESTORED_DEBATE_SCORE, type AdminIssueDetail } from '@/server/AdminStore';
 
 import { InMemoryAdminStore } from './InMemoryAdminStore';
+
+const createClassification = (
+  overrides: Partial<IssueClassification> = {},
+): IssueClassification => ({
+  isPolicyDebate: true,
+  debateScore: 82,
+  topic: '노동',
+  reason: '정년 연장은 찬반이 갈리는 정책 사안이다.',
+  entities: ['고용노동부'],
+  keySentences: ['정년 연장 논의가 본격화됐다.'],
+  keyClaims: ['정년을 연장해야 한다.'],
+  ...overrides,
+});
 
 const createIssue = (overrides: Partial<AdminIssueDetail> = {}): AdminIssueDetail => ({
   id: 'issue-1',
@@ -18,6 +33,11 @@ const createIssue = (overrides: Partial<AdminIssueDetail> = {}): AdminIssueDetai
   mediaPerspectives: [],
   opinionGroups: [],
   reviewNote: null,
+  classification: null,
+  debateScore: null,
+  topic: null,
+  classifiedAt: null,
+  verifiedAt: null,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   publishedAt: null,
   claims: [
@@ -35,6 +55,8 @@ const createIssue = (overrides: Partial<AdminIssueDetail> = {}): AdminIssueDetai
           date: new Date('2026-01-01T00:00:00.000Z'),
           summary: '근거 요약',
           url: 'https://example.com/1',
+          support: EvidenceSupport.SUPPORTS,
+          verificationNote: '판정 근거',
         },
       ],
     },
@@ -66,6 +88,25 @@ describe('InMemoryAdminStore', () => {
     expect(reviewList).toHaveLength(1);
     expect(reviewList[0]).toMatchObject({ articleCount: 1, claimCount: 1, hasWarning: false });
     expect(draftList[0]?.hasWarning).toBe(true);
+  });
+
+  it('목록에 점수·주제와 중복 경고 여부를 함께 담는다', async () => {
+    const store = new InMemoryAdminStore({
+      issues: [
+        createIssue({
+          debateScore: 82,
+          topic: '노동',
+          classification: createClassification({ duplicateOfIssueId: 'issue-9' }),
+        }),
+        createIssue({ id: 'issue-2', status: IssueStatus.DRAFT }),
+      ],
+    });
+
+    const [review] = await store.listIssues(IssueStatus.REVIEW);
+    const [draft] = await store.listIssues(IssueStatus.DRAFT);
+
+    expect(review).toMatchObject({ debateScore: 82, topic: '노동', hasDuplicateWarning: true });
+    expect(draft).toMatchObject({ debateScore: null, topic: null, hasDuplicateWarning: false });
   });
 
   it('반려된 이슈의 검수 메모는 경고로 세지 않는다', async () => {
@@ -197,5 +238,58 @@ describe('InMemoryAdminStore', () => {
 
     await store.deletePublisher(publishers[0].id);
     expect(await store.listPublishers()).toHaveLength(0);
+  });
+});
+
+describe('InMemoryAdminStore.restoreIssue', () => {
+  it('초안으로 되돌리고 점수를 상한값으로 올린다', async () => {
+    const store = new InMemoryAdminStore({
+      issues: [
+        createIssue({
+          status: IssueStatus.AUTO_REJECTED,
+          debateScore: 21,
+          reviewNote: '[자동 제외] 정책 논쟁이 아니다',
+          classifiedAt: new Date('2026-01-02T00:00:00.000Z'),
+          classification: createClassification({ isPolicyDebate: false, debateScore: 21 }),
+        }),
+      ],
+    });
+
+    await store.restoreIssue('issue-1');
+
+    const issue = await store.getIssue('issue-1');
+
+    expect(issue?.status).toBe(IssueStatus.DRAFT);
+    expect(issue?.debateScore).toBe(RESTORED_DEBATE_SCORE);
+  });
+
+  it('검수 메모와 분류 시각은 판단 근거로 남긴다', async () => {
+    const classifiedAt = new Date('2026-01-02T00:00:00.000Z');
+    const store = new InMemoryAdminStore({
+      issues: [
+        createIssue({
+          status: IssueStatus.AUTO_REJECTED,
+          reviewNote: '[자동 제외] 정책 논쟁이 아니다',
+          classifiedAt,
+          classification: createClassification(),
+        }),
+      ],
+    });
+
+    await store.restoreIssue('issue-1');
+
+    const issue = await store.getIssue('issue-1');
+
+    expect(issue?.reviewNote).toBe('[자동 제외] 정책 논쟁이 아니다');
+    expect(issue?.classifiedAt).toEqual(classifiedAt);
+    expect(issue?.classification).not.toBeNull();
+  });
+
+  it('없는 이슈면 아무 일도 하지 않는다', async () => {
+    const store = new InMemoryAdminStore({ issues: [createIssue()] });
+
+    await store.restoreIssue('issue-404');
+
+    expect((await store.getIssue('issue-1'))?.status).toBe(IssueStatus.REVIEW);
   });
 });

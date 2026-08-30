@@ -11,8 +11,17 @@ import {
   createFakeIssueRow,
   createFakePrismaClient,
   type FakeDatabase,
+  type FakeIssueRow,
 } from '@/testing/FakePrismaClient';
 import { createFakeTextClient } from '@/pipeline/FakeTextClient';
+
+const CLASSIFIED_AT = new Date('2026-08-21T00:00:00.000Z');
+
+/** classify 를 통과한 이슈. 추출 대상 조건(debateScore ≥ 임계값)을 만족한다. */
+const createClassifiedIssueRow = (
+  overrides: Partial<FakeIssueRow> & { id: string },
+): FakeIssueRow =>
+  createFakeIssueRow({ debateScore: 80, classifiedAt: CLASSIFIED_AT, ...overrides });
 
 const claimOf = (side: ClaimSide, index: number, articleIndexes: number[]) => ({
   side,
@@ -69,8 +78,21 @@ const EXTRACT_RESPONSE = {
 
 const createTextClient = () => createFakeTextClient({ [EXTRACT_SCHEMA_NAME]: [EXTRACT_RESPONSE] });
 
+/** 모델이 주장 문장에 기사 인덱스 인용 표기를 남긴 응답. */
+const CITED_EXTRACT_RESPONSE = {
+  ...EXTRACT_RESPONSE,
+  claims: EXTRACT_RESPONSE.claims.map((claim) => ({
+    ...claim,
+    title: `${claim.title} [0]`,
+    description: `${claim.description}[1, 2]`,
+  })),
+};
+
+const createCitedTextClient = () =>
+  createFakeTextClient({ [EXTRACT_SCHEMA_NAME]: [CITED_EXTRACT_RESPONSE] });
+
 const seed = (): Partial<FakeDatabase> => ({
-  issues: [createFakeIssueRow({ id: 'issue-1', question: '주 4.5일제를 도입해야 할까?' })],
+  issues: [createClassifiedIssueRow({ id: 'issue-1', question: '주 4.5일제를 도입해야 할까?' })],
   articles: [
     createFakeArticleRow({
       id: 'a1',
@@ -114,6 +136,19 @@ describe('extractClaims', () => {
     expect(db.claims).toHaveLength(6);
     expect(db.claims.filter((claim) => claim.side === 'AGREE').map((claim) => claim.order)).toEqual([0, 1, 2]);
     expect(db.claims.filter((claim) => claim.side === 'DISAGREE').map((claim) => claim.order)).toEqual([0, 1, 2]);
+  });
+
+  it('주장 제목·설명에서 인용 번호를 지우고 저장한다', async () => {
+    const { db, prisma } = createFakePrismaClient(seed());
+
+    await extractClaims({ prisma, textClient: createCitedTextClient() });
+
+    db.claims.forEach((claim) => {
+      expect(claim.title).not.toMatch(/\[\d/);
+      expect(claim.description).not.toMatch(/\[\d/);
+    });
+    expect(db.claims[0].title).toBe('AGREE 주장 1');
+    expect(db.claims[0].description).toBe('기사에서 확인된 설명이다. 두 번째 문장이다.');
   });
 
   it('근거를 기사 행으로 치환한다', async () => {
@@ -315,7 +350,7 @@ describe('extractClaims', () => {
     const base = seed();
     const { prisma } = createFakePrismaClient({
       ...base,
-      issues: [createFakeIssueRow({ id: 'issue-1' })],
+      issues: [createClassifiedIssueRow({ id: 'issue-1' })],
     });
 
     const result = await extractClaims({ prisma, textClient: createTextClient() });
@@ -330,5 +365,156 @@ describe('extractClaims', () => {
     const result = await extractClaims({ prisma, textClient: createTextClient() });
 
     expect(result).toEqual({ extracted: 0, skipped: 1, failed: [] });
+  });
+
+  it('논쟁성 점수가 임계값에 못 미치는 이슈는 대상에서 빠진다', async () => {
+    const base = seed();
+    const { prisma } = createFakePrismaClient({
+      ...base,
+      issues: [
+        createClassifiedIssueRow({ id: 'issue-1', question: '질문?', debateScore: 30 }),
+      ],
+    });
+    const textClient = createTextClient();
+
+    const result = await extractClaims({ prisma, textClient });
+
+    expect(result).toEqual({ extracted: 0, skipped: 0, failed: [] });
+    expect(textClient.requests).toHaveLength(0);
+  });
+
+  it('issueId 를 지정해도 자동 제외된 이슈는 되살리지 않는다', async () => {
+    const base = seed();
+    const { db, prisma } = createFakePrismaClient({
+      ...base,
+      issues: [
+        createClassifiedIssueRow({ id: 'issue-1', question: '질문?', status: 'AUTO_REJECTED' }),
+      ],
+    });
+
+    const result = await extractClaims({ prisma, textClient: createTextClient(), issueId: 'issue-1' });
+
+    expect(result).toEqual({ extracted: 0, skipped: 0, failed: [] });
+    expect(db.claims).toHaveLength(0);
+  });
+
+  it('점수가 높은 이슈부터 노출 상한만큼만 추출한다', async () => {
+    const base = seed();
+    const { db, prisma } = createFakePrismaClient({
+      ...base,
+      issues: [
+        createClassifiedIssueRow({ id: 'issue-low', question: '낮은 점수 질문?', debateScore: 65 }),
+        createClassifiedIssueRow({ id: 'issue-1', question: '높은 점수 질문?', debateScore: 95 }),
+      ],
+    });
+
+    const result = await extractClaims({ prisma, textClient: createTextClient(), exposeLimit: 1 });
+
+    expect(result.extracted).toBe(1);
+    expect(db.claims.every((claim) => claim.issueId === 'issue-1')).toBe(true);
+  });
+
+  it('분류가 뽑아 둔 사전 추출 요지를 프롬프트에 넣는다', async () => {
+    const base = seed();
+    const { prisma } = createFakePrismaClient({
+      ...base,
+      issues: [
+        createClassifiedIssueRow({
+          id: 'issue-1',
+          question: '주 4.5일제를 도입해야 할까?',
+          classification: {
+            isPolicyDebate: true,
+            debateScore: 80,
+            topic: '노동',
+            reason: '노동시간 제도 변경에 찬반이 갈린다.',
+            entities: ['국회'],
+            keySentences: ['적용 범위가 쟁점이다.', '중소기업 부담이 쟁점이다.', '임금 보전이 쟁점이다.'],
+            keyClaims: ['삶의 질이 좋아진다', '비용이 늘어난다', '생산성이 관건이다'],
+          },
+        }),
+      ],
+    });
+    const textClient = createTextClient();
+
+    await extractClaims({ prisma, textClient });
+
+    const { userPrompt } = textClient.requests[0];
+
+    expect(userPrompt).toContain('사전 추출 요지');
+    expect(userPrompt).toContain('- 주장: 비용이 늘어난다');
+  });
+});
+
+/** classify 결과. `duplicateOfIssueId` 를 넣으면 중복으로 표시된 이슈가 된다. */
+const classificationOf = (duplicateOfIssueId?: string) => ({
+  isPolicyDebate: true,
+  debateScore: 80,
+  topic: '노동',
+  reason: '정년 제도 변경에 찬반이 갈린다.',
+  entities: [],
+  keySentences: [],
+  keyClaims: [],
+  ...(duplicateOfIssueId === undefined ? {} : { duplicateOfIssueId }),
+});
+
+describe('extractClaims 중복 보류', () => {
+  it('중복 쌍은 하나만 추출한다', async () => {
+    const base = seed();
+    const { db, prisma } = createFakePrismaClient({
+      ...base,
+      issues: [
+        createClassifiedIssueRow({
+          id: 'issue-1',
+          question: '정년을 65세로 연장해야 할까?',
+          classification: classificationOf(),
+        }),
+        createClassifiedIssueRow({
+          id: 'issue-dup',
+          question: '정년 연장을 도입해야 할까?',
+          classification: classificationOf('issue-1'),
+        }),
+      ],
+      articles: [
+        ...(base.articles ?? []),
+        createFakeArticleRow({ id: 'a4', issueId: 'issue-dup' }),
+      ],
+    });
+
+    const result = await extractClaims({ prisma, textClient: createTextClient() });
+
+    expect(result).toEqual({ extracted: 1, skipped: 1, failed: [] });
+    expect(db.claims.every((claim) => claim.issueId === 'issue-1')).toBe(true);
+  });
+
+  it('issueId 를 지정하면 중복이어도 추출한다', async () => {
+    const base = seed();
+    const { db, prisma } = createFakePrismaClient({
+      ...base,
+      issues: [
+        createClassifiedIssueRow({
+          id: 'issue-1',
+          question: '정년을 65세로 연장해야 할까?',
+          classification: classificationOf(),
+        }),
+        createClassifiedIssueRow({
+          id: 'issue-dup',
+          question: '정년 연장을 도입해야 할까?',
+          classification: classificationOf('issue-1'),
+        }),
+      ],
+      articles: [
+        ...(base.articles ?? []),
+        createFakeArticleRow({ id: 'a4', issueId: 'issue-dup' }),
+      ],
+    });
+
+    const result = await extractClaims({
+      prisma,
+      textClient: createTextClient(),
+      issueId: 'issue-dup',
+    });
+
+    expect(result.extracted).toBe(1);
+    expect(db.claims.every((claim) => claim.issueId === 'issue-dup')).toBe(true);
   });
 });

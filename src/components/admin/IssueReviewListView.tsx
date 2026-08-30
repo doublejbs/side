@@ -9,6 +9,9 @@ interface Props {
   issues: AdminIssueListItem[];
 }
 
+/** 아직 분류되지 않아 값이 없는 칸. */
+const EMPTY_VALUE = '–';
+
 export const IssueReviewListView = ({ issues }: Props) => {
   if (issues.length === 0) {
     return <p className={styles.empty}>이 상태의 이슈가 없습니다.</p>;
@@ -25,6 +28,12 @@ export const IssueReviewListView = ({ issues }: Props) => {
           <th scope="col" className={styles.numeric}>
             주장
           </th>
+          <th scope="col" className={styles.numeric}>
+            점수
+          </th>
+          <th scope="col" className={styles.topic}>
+            주제
+          </th>
           <th scope="col">생성일</th>
         </tr>
       </thead>
@@ -36,9 +45,14 @@ export const IssueReviewListView = ({ issues }: Props) => {
                 {issue.question}
               </Link>
               {issue.hasWarning ? <span className={styles.warning}>검수 경고</span> : null}
+              {issue.hasDuplicateWarning ? (
+                <span className={styles.duplicate}>중복 가능</span>
+              ) : null}
             </td>
             <td className={styles.numeric}>{issue.articleCount}</td>
             <td className={styles.numeric}>{issue.claimCount}</td>
+            <td className={styles.numeric}>{issue.debateScore ?? EMPTY_VALUE}</td>
+            <td className={styles.topic}>{issue.topic ?? EMPTY_VALUE}</td>
             <td className={styles.date}>{formatAdminDate(issue.createdAt)}</td>
           </tr>
         ))}

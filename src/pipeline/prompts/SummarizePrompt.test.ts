@@ -44,6 +44,25 @@ describe('buildSummarizeSystemPrompt', () => {
     expect(prompt).toContain('물음표로 끝나고 30자를 넘지 않는다');
   });
 
+  it('찬반으로 답할 수 있는 정책 질문만 허용한다', () => {
+    expect(prompt).toContain('찬성/반대로 답할 수 있는 정책·제도 질문');
+    expect(prompt).toContain("'~해야 할까?', '~가 필요한가?', '~를 허용해야 할까?'");
+  });
+
+  it('설명·예측형 질문을 금지하고 좋은 예·나쁜 예를 함께 보여 준다', () => {
+    expect(prompt).toContain("금지: '~쟁점은 무엇인가?'");
+    expect(prompt).toContain('- 좋은 예: "주 4.5일제를 도입해야 할까?" / "정년을 65세로 연장해야 할까?" / "원전 비중을 확대해야 할까?"');
+    expect(prompt).toContain('- 나쁜 예: "금융노조 총파업 쟁점은?" / "울산 버스 파업 막을 수 있나?" / "CPTPP 가입을 어떻게 논의하나?"');
+  });
+
+  it('사건 경과 이슈라면 안에 있는 제도 쟁점을 질문으로 삼으라고 안내한다', () => {
+    expect(prompt).toContain('노사 협상·사건 경과라면 그 안의 제도 쟁점');
+  });
+
+  it('요약·질문·쟁점에 인용 번호를 넣지 말라고 못 박는다', () => {
+    expect(prompt).toContain('`[0]` 같은 인용 번호나 출처 표기를 넣지 않는다');
+  });
+
   it('입력에 없는 사실과 URL 창작을 금지한다', () => {
     expect(prompt).toContain('URL·매체명·날짜·수치를 창작하지 않는다');
   });

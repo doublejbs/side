@@ -12,6 +12,7 @@ const renderBar = (status: IssueStatus) =>
       status={status}
       publishIssueAction={noop}
       rejectIssueAction={noop}
+      restoreIssueAction={noop}
       regenerateIssueAction={noop}
     />,
   );
@@ -45,5 +46,30 @@ describe('IssueActionBarView', () => {
 
     expect(screen.getByRole('button', { name: '요약 다시 생성' })).toBeDisabled();
     expect(screen.getByText(/다시 생성할 수 없습니다/)).toBeInTheDocument();
+  });
+
+  it('자동 제외·반려 상태에서만 복원 버튼을 보여준다', () => {
+    const autoRejected = renderBar(IssueStatus.AUTO_REJECTED);
+
+    expect(screen.getByRole('button', { name: '검수 대상으로 복원' })).toBeEnabled();
+
+    autoRejected.unmount();
+    const rejected = renderBar(IssueStatus.REJECTED);
+
+    expect(screen.getByRole('button', { name: '검수 대상으로 복원' })).toBeEnabled();
+
+    rejected.unmount();
+    renderBar(IssueStatus.REVIEW);
+
+    expect(screen.queryByRole('button', { name: '검수 대상으로 복원' })).not.toBeInTheDocument();
+  });
+
+  it('자동 제외 상태에서는 다시 생성을 막고 이유를 보여준다', () => {
+    renderBar(IssueStatus.AUTO_REJECTED);
+
+    const button = screen.getByRole('button', { name: '요약 다시 생성' });
+
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('title', expect.stringContaining('다시 생성할 수 없습니다'));
   });
 });

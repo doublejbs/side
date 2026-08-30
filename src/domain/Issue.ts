@@ -1,4 +1,5 @@
 import { ClaimSide } from '@/domain/ClaimSide';
+import { EvidenceSupport } from '@/domain/EvidenceSupport';
 import { EvidenceType } from '@/domain/EvidenceType';
 import { MediaLeaning } from '@/domain/MediaLeaning';
 
@@ -23,6 +24,8 @@ export interface Evidence {
   date: string;
   summary: string;
   url: string;
+  /** verify 가 매긴 주장 지지 여부. 아직 검증되지 않았으면 없다. */
+  support?: EvidenceSupport;
 }
 
 export interface Claim {

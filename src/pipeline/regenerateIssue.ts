@@ -6,8 +6,14 @@ import { ARTICLE_SELECT } from '@/pipeline/articleSelect';
 import { applyClaimsDraft, generateClaimsDraft } from '@/pipeline/extractClaims';
 import { appendWarnings, collectIssueWarnings } from '@/pipeline/linkSources';
 import { RegenerateNotAllowedError } from '@/pipeline/RegenerateNotAllowedError';
-import { appendNoteLine, applySummaryDraft, generateSummaryDraft } from '@/pipeline/summarizeIssues';
+import {
+  appendNoteLine,
+  applySummaryDraft,
+  generateSummaryDraft,
+  readClassificationDigest,
+} from '@/pipeline/summarizeIssues';
 import type { TextClient } from '@/pipeline/TextClient';
+import { verifyEvidence } from '@/pipeline/verifyEvidence';
 
 interface RegenerateIssueDeps {
   prisma: PrismaClient;
@@ -38,6 +44,7 @@ export const regenerateIssue = async ({
       id: true,
       status: true,
       reviewNote: true,
+      classification: true,
       articles: { select: ARTICLE_SELECT },
     },
   });
@@ -58,12 +65,14 @@ export const regenerateIssue = async ({
 
   // (a) 생성 — DB 를 건드리지 않고 LLM 결과를 모두 받아 검증한다.
   const publishers = await prisma.publisher.findMany();
-  const summaryDraft = await generateSummaryDraft({ textClient, articles });
+  const digest = readClassificationDigest(issue.classification);
+  const summaryDraft = await generateSummaryDraft({ textClient, articles, digest });
   const claimsDraft = await generateClaimsDraft({
     textClient,
     question: summaryDraft.question,
     articles,
     publishers,
+    digest,
   });
 
   // (b) 적용 — 한 트랜잭션 안에서 기존 주장을 지우고 새 결과를 저장한다.
@@ -82,26 +91,29 @@ export const regenerateIssue = async ({
       issue: { id: issue.id, reviewNote: baseNote },
       draft: claimsDraft,
     });
+  });
 
-    const saved = await tx.issue.findUnique({
-      where: { id: issue.id },
-      select: {
-        reviewNote: true,
-        articles: { select: { id: true } },
-        claims: {
-          select: { side: true, title: true, evidences: { select: { articleId: true, summary: true } } },
-        },
-      },
-    });
+  // (c) 검증 — 근거 id 는 주장을 저장한 뒤에야 정해지므로 트랜잭션 밖에서 이어서 돌린다.
+  // 분류(classify)는 그대로 두고 summarize → extract → verify → link 만 다시 실행한다.
+  await verifyEvidence({ prisma, textClient, issueId: issue.id, now });
 
-    await tx.issue.update({
-      where: { id: issue.id },
-      data: {
-        status: IssueStatus.REVIEW,
-        reviewNote: saved
-          ? appendWarnings(saved.reviewNote, collectIssueWarnings(saved))
-          : baseNote,
+  // (d) 연결 — 구조를 검사해 경고를 남기고 검수 대기로 넘긴다.
+  const saved = await prisma.issue.findUnique({
+    where: { id: issue.id },
+    select: {
+      reviewNote: true,
+      articles: { select: { id: true } },
+      claims: {
+        select: { side: true, title: true, evidences: { select: { articleId: true, summary: true } } },
       },
-    });
+    },
+  });
+
+  await prisma.issue.update({
+    where: { id: issue.id },
+    data: {
+      status: IssueStatus.REVIEW,
+      reviewNote: saved ? appendWarnings(saved.reviewNote, collectIssueWarnings(saved)) : baseNote,
+    },
   });
 };

@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
+import { ZodError } from 'zod';
 
 import { MessageRole } from '@/pipeline/MessageRole';
 import { StructuredOutputError } from '@/pipeline/StructuredOutputError';
@@ -35,6 +36,35 @@ const RETRY_NOTICE =
   '\n\n[재시도] 직전 응답이 형식 검증에 실패했습니다. 설명 없이 스키마를 정확히 지킨 JSON 하나만 출력하세요.';
 
 const MAX_ATTEMPTS = 2;
+
+/** 재시도 프롬프트에 넣는 실패 사유의 최대 길이. 프롬프트가 길어지는 것을 막는다. */
+const MAX_FAILURE_REASON_LENGTH = 500;
+
+/**
+ * 직전 시도가 왜 실패했는지 한 줄로 옮긴다.
+ * zod 실패는 필드별 메시지를 그대로 넘겨 모델이 무엇을 고쳐야 하는지 알게 한다
+ * (예: 질문이 설명·예측형이라 refine 에 걸린 경우).
+ */
+export const describeStructuredFailure = (error: unknown): string => {
+  if (error instanceof ZodError) {
+    return error.issues
+      .map((issue) => `${issue.path.join('.') || '(루트)'}: ${issue.message}`)
+      .join(' / ');
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return '';
+};
+
+/** 실패 사유를 붙인 재시도 안내. 사유를 알 수 없으면 기본 안내만 쓴다. */
+const buildRetryNotice = (error: unknown): string => {
+  const reason = describeStructuredFailure(error).slice(0, MAX_FAILURE_REASON_LENGTH);
+
+  return reason.length > 0 ? `${RETRY_NOTICE}\n실패 사유 — ${reason}` : RETRY_NOTICE;
+};
 
 const toParsedValue = (response: ResponsesParseResult): unknown => {
   if (response.output_parsed !== undefined && response.output_parsed !== null) {
@@ -79,7 +109,9 @@ export const createOpenAiTextClient = ({
 
       for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
         const userPrompt =
-          attempt === 1 ? request.userPrompt : `${request.userPrompt}${RETRY_NOTICE}`;
+          attempt === 1
+            ? request.userPrompt
+            : `${request.userPrompt}${buildRetryNotice(lastError)}`;
 
         try {
           return await requestOnce(request, userPrompt);

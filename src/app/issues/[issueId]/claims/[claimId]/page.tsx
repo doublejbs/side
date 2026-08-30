@@ -8,6 +8,7 @@ import { ArrowLinkView } from '@/components/common/ArrowLinkView';
 import { BackHeaderView } from '@/components/common/BackHeaderView';
 import { getIssueRepository } from '@/data/getIssueRepository';
 import { getClaimSideAnchor } from '@/domain/claimSidePresenter';
+import { decodeSlugParam } from '@/server/decodeRouteParam';
 import { isServerVoteEnabled } from '@/server/isServerVoteEnabled';
 
 import styles from './page.module.css';
@@ -33,7 +34,7 @@ export const generateStaticParams = async (): Promise<{ issueId: string; claimId
 
 export const generateMetadata = async ({ params }: Props): Promise<Metadata> => {
   const { issueId, claimId } = await params;
-  const claim = await getIssueRepository().getClaimById(issueId, claimId);
+  const claim = await getIssueRepository().getClaimById(decodeSlugParam(issueId), claimId);
 
   if (!claim) {
     return { title: 'SIDE' };
@@ -44,9 +45,10 @@ export const generateMetadata = async ({ params }: Props): Promise<Metadata> => 
 
 const ClaimEvidencePage = async ({ params }: Props) => {
   const { issueId, claimId } = await params;
+  const slug = decodeSlugParam(issueId);
   const repository = getIssueRepository();
-  const issue = await repository.getIssueBySlug(issueId);
-  const claim = await repository.getClaimById(issueId, claimId);
+  const issue = await repository.getIssueBySlug(slug);
+  const claim = await repository.getClaimById(slug, claimId);
 
   if (!issue || !claim) {
     notFound();

@@ -3,8 +3,11 @@ import { AdminButtonView } from '@/components/admin/AdminButtonView';
 import { AdminSelectFieldView } from '@/components/admin/AdminSelectFieldView';
 import { AdminTextAreaFieldView } from '@/components/admin/AdminTextAreaFieldView';
 import { AdminTextFieldView } from '@/components/admin/AdminTextFieldView';
+import { EvidenceSupportBadgeView } from '@/components/admin/EvidenceSupportBadgeView';
 import { EVIDENCE_TYPE_LABEL } from '@/components/admin/adminLabels';
 import { formatAdminDate } from '@/components/admin/formatAdminDate';
+import { joinClassNames } from '@/components/common/joinClassNames';
+import { EvidenceSupport } from '@/domain/EvidenceSupport';
 import { EvidenceType } from '@/domain/EvidenceType';
 import { AdminFormField } from '@/server/AdminFormField';
 import {
@@ -20,6 +23,18 @@ const EVIDENCE_TYPE_OPTIONS = Object.values(EvidenceType).map((type) => ({
   value: type,
   label: EVIDENCE_TYPE_LABEL[type],
 }));
+
+/** 앱 응답에서 빠지는 판정. 삭제하지는 않지만 검수 화면에서도 흐리게 둔다. */
+const UNSUPPORTED_SUPPORTS: EvidenceSupport[] = [
+  EvidenceSupport.UNRELATED,
+  EvidenceSupport.CONTRADICTS,
+];
+
+/** 흐리게 처리한 근거의 이유. 배지 옆 툴팁으로 같은 문장을 쓴다. */
+const UNSUPPORTED_REASON = '앱에는 노출되지 않음';
+
+const isUnsupported = (support: EvidenceSupport | null): boolean =>
+  support !== null && UNSUPPORTED_SUPPORTS.includes(support);
 
 interface Props {
   claim: AdminClaim;
@@ -62,8 +77,19 @@ export const ClaimEditorCardView = ({
         <p className={styles.empty}>근거가 없습니다. 파이프라인을 다시 실행해 주세요.</p>
       ) : null}
       {claim.evidences.map((evidence) => (
-        <div key={evidence.id} className={styles.evidence}>
+        <div
+          key={evidence.id}
+          className={joinClassNames(
+            styles.evidence,
+            isUnsupported(evidence.support) && styles.unsupported,
+          )}
+          title={isUnsupported(evidence.support) ? UNSUPPORTED_REASON : undefined}
+        >
+          {evidence.support ? <EvidenceSupportBadgeView support={evidence.support} /> : null}
           <p className={styles.evidenceSummary}>{evidence.summary}</p>
+          {evidence.verificationNote ? (
+            <p className={styles.evidenceNote}>{evidence.verificationNote}</p>
+          ) : null}
           <p className={styles.evidenceMeta}>
             {evidence.source} · {formatAdminDate(evidence.date)}
           </p>

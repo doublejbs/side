@@ -1,15 +1,16 @@
 import { IssueStatus } from '@/domain/IssueStatus';
-import type {
-  AdminClaimPatch,
-  AdminClaimPatchEntry,
-  AdminEvidencePatch,
-  AdminIssueDetail,
-  AdminIssueListItem,
-  AdminIssuePatch,
-  AdminPublisher,
-  AdminPublisherInput,
-  AdminSearchQuery,
-  AdminStore,
+import {
+  RESTORED_DEBATE_SCORE,
+  type AdminClaimPatch,
+  type AdminClaimPatchEntry,
+  type AdminEvidencePatch,
+  type AdminIssueDetail,
+  type AdminIssueListItem,
+  type AdminIssuePatch,
+  type AdminPublisher,
+  type AdminPublisherInput,
+  type AdminSearchQuery,
+  type AdminStore,
 } from '@/server/AdminStore';
 
 export interface InMemoryAdminData {
@@ -60,6 +61,9 @@ export class InMemoryAdminStore implements AdminStore {
         claimCount: issue.claims.length,
         createdAt: new Date(issue.createdAt),
         hasWarning: issue.status !== IssueStatus.REJECTED && Boolean(issue.reviewNote),
+        debateScore: issue.debateScore,
+        topic: issue.topic,
+        hasDuplicateWarning: Boolean(issue.classification?.duplicateOfIssueId),
       }));
   }
 
@@ -160,6 +164,18 @@ export class InMemoryAdminStore implements AdminStore {
 
     issue.status = IssueStatus.REJECTED;
     issue.reviewNote = note;
+  }
+
+  /** 복원은 상태와 점수만 바꾼다. 검수 메모와 분류 시각은 판단 근거로 남긴다. */
+  async restoreIssue(id: string): Promise<void> {
+    const issue = this.findIssue(id);
+
+    if (!issue) {
+      return;
+    }
+
+    issue.status = IssueStatus.DRAFT;
+    issue.debateScore = RESTORED_DEBATE_SCORE;
   }
 
   async listQueries(): Promise<AdminSearchQuery[]> {

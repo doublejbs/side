@@ -4,7 +4,7 @@ import { IssueStatus } from '@/domain/IssueStatus';
 import { MediaLeaning } from '@/domain/MediaLeaning';
 import { AdminActionError } from '@/server/AdminActionError';
 import { AdminMessage } from '@/server/AdminMessage';
-import type { AdminIssueDetail } from '@/server/AdminStore';
+import { RESTORED_DEBATE_SCORE, type AdminIssueDetail } from '@/server/AdminStore';
 import { InMemoryAdminStore } from '@/server/InMemoryAdminStore';
 import { PUBLIC_PAGE_TARGETS, type PublicPageTarget } from '@/server/PublicPageTargets';
 
@@ -16,6 +16,7 @@ import {
   parseTagList,
   publishIssue,
   rejectIssue,
+  restoreIssue,
   saveClaim,
   saveIssue,
   savePublisher,
@@ -46,6 +47,11 @@ const createIssue = (overrides: Partial<AdminIssueDetail> = {}): AdminIssueDetai
     },
   ],
   reviewNote: null,
+  classification: null,
+  debateScore: null,
+  topic: null,
+  classifiedAt: null,
+  verifiedAt: null,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   publishedAt: null,
   claims: [
@@ -256,12 +262,23 @@ describe('saveClaim', () => {
 });
 
 describe('publishIssue', () => {
-  it('질문에서 slug 를 만들어 승인한다', async () => {
+  it('질문의 영문·숫자로 slug 를 만들어 승인한다', async () => {
+    const store = new InMemoryAdminStore({
+      issues: [createIssue({ question: 'CPTPP 가입을 추진해야 할까?' })],
+    });
+
+    const slug = await publishIssue(store, 'issue-1');
+
+    expect(slug).toBe('cptpp');
+    expect((await store.getIssue('issue-1'))?.status).toBe(IssueStatus.PUBLISHED);
+  });
+
+  it('한글만 있는 질문은 날짜·해시 폴백 slug 로 승인한다', async () => {
     const store = new InMemoryAdminStore({ issues: [createIssue()] });
 
     const slug = await publishIssue(store, 'issue-1');
 
-    expect(slug).toBe('정년을-연장해야-할까');
+    expect(slug).toMatch(/^issue-\d{8}-[0-9a-z]{6}$/);
     expect((await store.getIssue('issue-1'))?.status).toBe(IssueStatus.PUBLISHED);
   });
 
@@ -270,14 +287,14 @@ describe('publishIssue', () => {
       issues: [
         createIssue({
           id: 'issue-0',
-          slug: '정년을-연장해야-할까',
+          slug: 'cptpp',
           status: IssueStatus.PUBLISHED,
         }),
-        createIssue(),
+        createIssue({ question: 'CPTPP 가입을 추진해야 할까?' }),
       ],
     });
 
-    expect(await publishIssue(store, 'issue-1')).toBe('정년을-연장해야-할까-2');
+    expect(await publishIssue(store, 'issue-1')).toBe('cptpp-2');
   });
 
   it('검수 대기가 아닌 이슈는 승인하지 않는다', async () => {
@@ -476,6 +493,8 @@ describe('근거 소유권 확인', () => {
                   date: new Date('2026-01-01T00:00:00.000Z'),
                   summary: '요약',
                   url: 'https://example.com/1',
+                  support: null,
+                  verificationNote: null,
                 },
               ],
             },
@@ -498,6 +517,8 @@ describe('근거 소유권 확인', () => {
                   date: new Date('2026-01-01T00:00:00.000Z'),
                   summary: '요약',
                   url: 'https://example.com/2',
+                  support: null,
+                  verificationNote: null,
                 },
               ],
             },
@@ -542,5 +563,56 @@ describe('근거 소유권 확인', () => {
 
     await deleteEvidence(store, 'issue-1', 'evidence-1');
     expect((await store.getIssue('issue-1'))?.claims[0]?.evidences).toHaveLength(0);
+  });
+});
+
+describe('restoreIssue', () => {
+  it('자동 제외된 이슈를 초안으로 되돌리고 점수를 상한값으로 올린다', async () => {
+    const store = new InMemoryAdminStore({
+      issues: [
+        createIssue({
+          status: IssueStatus.AUTO_REJECTED,
+          debateScore: 30,
+          reviewNote: '[자동 제외] 정책 논쟁이 아니다',
+        }),
+      ],
+    });
+
+    await restoreIssue(store, 'issue-1');
+
+    const issue = await store.getIssue('issue-1');
+
+    expect(issue?.status).toBe(IssueStatus.DRAFT);
+    expect(issue?.debateScore).toBe(RESTORED_DEBATE_SCORE);
+    expect(issue?.reviewNote).toBe('[자동 제외] 정책 논쟁이 아니다');
+  });
+
+  it('반려된 이슈도 복원할 수 있다', async () => {
+    const store = new InMemoryAdminStore({
+      issues: [createIssue({ status: IssueStatus.REJECTED, reviewNote: '근거 부족' })],
+    });
+
+    await restoreIssue(store, 'issue-1');
+
+    expect((await store.getIssue('issue-1'))?.status).toBe(IssueStatus.DRAFT);
+  });
+
+  it('검수 대기·초안·발행 이슈는 복원할 수 없다', async () => {
+    for (const status of [IssueStatus.REVIEW, IssueStatus.DRAFT, IssueStatus.PUBLISHED]) {
+      const store = new InMemoryAdminStore({ issues: [createIssue({ status })] });
+
+      await expect(restoreIssue(store, 'issue-1')).rejects.toThrow(
+        new AdminActionError(AdminMessage.ERROR_NOT_RESTORABLE),
+      );
+      expect((await store.getIssue('issue-1'))?.status).toBe(status);
+    }
+  });
+
+  it('없는 이슈면 찾을 수 없다고 알린다', async () => {
+    const store = new InMemoryAdminStore({ issues: [] });
+
+    await expect(restoreIssue(store, 'issue-404')).rejects.toThrow(
+      new AdminActionError(AdminMessage.ERROR_NOT_FOUND),
+    );
   });
 });

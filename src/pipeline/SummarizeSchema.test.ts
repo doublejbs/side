@@ -27,6 +27,19 @@ describe('summarizeSchema', () => {
     expect(summarizeSchema.safeParse({ ...VALID, question: '주 4.5일제 도입 논의' }).success).toBe(false);
   });
 
+  it('설명·예측형 질문을 거절한다', () => {
+    expect(summarizeSchema.safeParse({ ...VALID, question: '금융노조 총파업 쟁점은?' }).success).toBe(false);
+    expect(summarizeSchema.safeParse({ ...VALID, question: '울산 버스 파업 막을 수 있나?' }).success).toBe(false);
+    expect(summarizeSchema.safeParse({ ...VALID, question: '기아 노사 합의될까?' }).success).toBe(false);
+  });
+
+  it('질문 형식 위반 사유를 메시지에 남긴다', () => {
+    const result = summarizeSchema.safeParse({ ...VALID, question: '금융노조 총파업 쟁점은?' });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].message).toContain('질문 형식 위반');
+  });
+
   it('30자를 넘는 질문을 거절한다', () => {
     const question = `${'주 4.5일제를 도입해야 하는지에 대한 사회적 논의는'.repeat(2)}?`;
 

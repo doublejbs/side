@@ -1,5 +1,9 @@
 import { MediaLeaning } from '@/domain/MediaLeaning';
 import { ARTICLE_INJECTION_GUARD, wrapArticles } from '@/pipeline/prompts/ArticleBoundary';
+import {
+  formatClassificationDigest,
+  type ClassificationDigest,
+} from '@/pipeline/prompts/ClassificationDigest';
 import { NEUTRALITY_PRINCIPLES } from '@/pipeline/prompts/NeutralityPrinciples';
 import { formatPromptArticles, type PromptArticle } from '@/pipeline/prompts/PromptArticle';
 
@@ -13,6 +17,7 @@ interface ExtractUserPromptInput {
   question: string;
   articles: PromptArticle[];
   leaningGroups: LeaningArticleGroup[];
+  digest?: ClassificationDigest;
 }
 
 const LEANING_LABEL: Record<MediaLeaning, string> = {
@@ -69,10 +74,12 @@ export const buildExtractUserPrompt = ({
   question,
   articles,
   leaningGroups,
+  digest,
 }: ExtractUserPromptInput): string =>
   [
     `이슈 질문: ${question}`,
     '',
+    ...formatClassificationDigest(digest),
     `기사 ${articles.length}건(최신순). 대괄호 안 숫자가 articleIndex 다.`,
     ARTICLE_INJECTION_GUARD,
     '',

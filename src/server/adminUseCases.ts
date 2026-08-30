@@ -70,6 +70,9 @@ export interface PublisherInput {
   leaning: MediaLeaning | null;
 }
 
+/** 복원을 허용하는 상태. 검수 대상으로 되돌릴 수 있는 것은 제외된 이슈뿐이다. */
+const RESTORABLE_STATUSES: IssueStatus[] = [IssueStatus.AUTO_REJECTED, IssueStatus.REJECTED];
+
 const MIN_SHARE = 0;
 
 const MAX_SHARE = 100;
@@ -303,6 +306,20 @@ export const rejectIssue = async (
   await store.rejectIssue(issue.id, trimmed);
 
   revalidatePublicPages?.(PUBLIC_PAGE_TARGETS);
+};
+
+/**
+ * 복원. 자동 제외(오탐)·반려된 이슈만 검수 대상(DRAFT)으로 되돌린다.
+ * 근거: `docs/PipelineTieringSpec.md` 5장.
+ */
+export const restoreIssue = async (store: AdminStore, issueId: string): Promise<void> => {
+  const issue = await requireIssue(store, issueId);
+
+  if (!RESTORABLE_STATUSES.includes(issue.status)) {
+    throw new AdminActionError(AdminMessage.ERROR_NOT_RESTORABLE);
+  }
+
+  await store.restoreIssue(issue.id);
 };
 
 /** 수집 키워드 추가. 같은 키워드가 있으면 다시 활성화한다. */

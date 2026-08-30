@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { mapIssueRow } from '@/data/IssueMapper';
 import type { IssueAggregates, IssueRow } from '@/data/IssueMapper';
 import { ClaimSide } from '@/domain/ClaimSide';
+import { EvidenceSupport } from '@/domain/EvidenceSupport';
 import { EvidenceType } from '@/domain/EvidenceType';
 import { MediaLeaning } from '@/domain/MediaLeaning';
 
@@ -152,6 +153,45 @@ describe('mapIssueRow', () => {
     expect(issue.mediaPerspectives[0].leaning).toBe(MediaLeaning.PROGRESSIVE);
     expect(issue.opinionGroups[0].label).toBe('그룹 A');
     expect(issue.commonCoverage).toHaveLength(2);
+  });
+
+  it('검증에서 무관·반박으로 판정된 근거는 앱 응답에서 제외한다', () => {
+    const row = createRow();
+
+    row.claims[1].evidences = [
+      { ...row.claims[1].evidences[0], id: 'evidence-supports', support: EvidenceSupport.SUPPORTS },
+      { ...row.claims[1].evidences[0], id: 'evidence-partial', support: EvidenceSupport.PARTIAL },
+      { ...row.claims[1].evidences[0], id: 'evidence-unrelated', support: EvidenceSupport.UNRELATED },
+      {
+        ...row.claims[1].evidences[0],
+        id: 'evidence-contradicts',
+        support: EvidenceSupport.CONTRADICTS,
+      },
+    ];
+
+    const issue = mapIssueRow(row, createAggregates());
+
+    expect(issue.claims[0].evidences.map((evidence) => evidence.id)).toEqual([
+      'evidence-supports',
+      'evidence-partial',
+    ]);
+  });
+
+  it('아직 검증되지 않은 근거는 그대로 내보낸다', () => {
+    const issue = mapIssueRow(createRow(), createAggregates());
+
+    expect(issue.claims[0].evidences).toHaveLength(1);
+    expect(issue.claims[0].evidences[0].support).toBeUndefined();
+  });
+
+  it('검증된 근거는 판정을 도메인 enum 으로 옮긴다', () => {
+    const row = createRow();
+
+    row.claims[1].evidences[0].support = EvidenceSupport.PARTIAL;
+
+    const issue = mapIssueRow(row, createAggregates());
+
+    expect(issue.claims[0].evidences[0].support).toBe(EvidenceSupport.PARTIAL);
   });
 
   it('Json 필드가 스키마에 맞지 않으면 빈 배열로 떨어뜨린다', () => {

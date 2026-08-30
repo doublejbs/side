@@ -11,6 +11,12 @@ import type { MediaLeaning } from '@/domain/MediaLeaning';
 import { buildOpinionGroupId, getOpinionGroupLabel } from '@/domain/opinionGroupPresenter';
 import { ARTICLE_SELECT, type PipelineArticleRow } from '@/pipeline/articleSelect';
 import {
+  collectDuplicateOfIssueIds,
+  loadDuplicateTargets,
+  resolveDuplicateHolds,
+  sortDuplicateAwareIssues,
+} from '@/pipeline/duplicateHold';
+import {
   EXTRACT_SCHEMA_NAME,
   extractSchema,
   type ClaimDraft,
@@ -23,9 +29,16 @@ import {
   selectPromptArticles,
   toPromptArticle,
 } from '@/pipeline/selectPromptArticles';
-import { appendNoteLine, DEFAULT_MAX_ARTICLES } from '@/pipeline/summarizeIssues';
+import { DEFAULT_DEBATE_THRESHOLD, DEFAULT_EXPOSE_LIMIT } from '@/pipeline/PipelineEnv';
+import { stripCitationMarkers } from '@/pipeline/stripCitationMarkers';
+import {
+  appendNoteLine,
+  DEFAULT_MAX_ARTICLES,
+  readClassificationDigest,
+} from '@/pipeline/summarizeIssues';
 import type { TextClient } from '@/pipeline/TextClient';
 import { UNDECIDED_QUESTION } from '@/pipeline/UndecidedQuestion';
+import type { ClassificationDigest } from '@/pipeline/prompts/ClassificationDigest';
 import {
   buildExtractSystemPrompt,
   buildExtractUserPrompt,
@@ -38,6 +51,10 @@ interface ExtractClaimsDeps {
   /** 지정하면 그 이슈의 기존 주장을 지우고 다시 만든다(관리자의 "요약 다시 생성"). */
   issueId?: string;
   maxArticles?: number;
+  /** 이 점수 미만인 이슈는 논점을 추출하지 않는다(classify 결과). */
+  debateThreshold?: number;
+  /** 한 번 실행에서 처리할 이슈 수 상한. `--issue` 를 지정하면 무시한다. */
+  exposeLimit?: number;
 }
 
 export interface ExtractClaimsResult {
@@ -53,9 +70,14 @@ const EXTRACT_ISSUE_SELECT = {
   status: true,
   question: true,
   reviewNote: true,
+  debateScore: true,
+  classification: true,
   articles: { select: ARTICLE_SELECT },
   claims: { select: { id: true } },
 } as const satisfies Prisma.IssueSelect;
+
+/** `--issue` 로 지정했을 때 허용하는 상태. 자동 제외·승인·반려된 이슈는 다시 추출하지 않는다. */
+const EXTRACTABLE_STATUSES = [IssueStatus.DRAFT, IssueStatus.REVIEW];
 
 interface PublisherRow {
   domain: string;
@@ -254,6 +276,7 @@ interface GenerateClaimsDraftParams {
   articles: PipelineArticleRow[];
   publishers: PublisherRow[];
   maxArticles?: number;
+  digest?: ClassificationDigest;
 }
 
 /**
@@ -266,6 +289,7 @@ export const generateClaimsDraft = async ({
   articles,
   publishers,
   maxArticles = DEFAULT_MAX_ARTICLES,
+  digest,
 }: GenerateClaimsDraftParams): Promise<ClaimsDraft> => {
   const lookup = buildLeaningLookup(publishers);
   const leaningOf = (article: PipelineArticleRow) => resolveLeaning(article, lookup);
@@ -288,6 +312,7 @@ export const generateClaimsDraft = async ({
       question,
       articles: selected.map(toPromptArticle),
       leaningGroups: buildLeaningGroups(selected, leaningOf),
+      digest,
     }),
   });
 
@@ -306,8 +331,9 @@ export const generateClaimsDraft = async ({
     return {
       side: toPrismaClaimSide(draft.side),
       order,
-      title: draft.title,
-      description: draft.description,
+      // 근거의 `articleIndex` 는 그대로 두고, 독자에게 보이는 문장에서만 인용 번호를 지운다.
+      title: stripCitationMarkers(draft.title),
+      description: stripCitationMarkers(draft.description),
       evidences: built.evidences,
     };
   });
@@ -376,22 +402,48 @@ export const extractClaims = async ({
   textClient,
   issueId,
   maxArticles = DEFAULT_MAX_ARTICLES,
+  debateThreshold = DEFAULT_DEBATE_THRESHOLD,
+  exposeLimit = DEFAULT_EXPOSE_LIMIT,
 }: ExtractClaimsDeps): Promise<ExtractClaimsResult> => {
+  // `--issue` 를 지정하면 상한과 임계값을 무시하되, 자동 제외된 이슈는 되살리지 않는다.
   const issues = await prisma.issue.findMany({
     where: issueId
-      ? { id: issueId }
-      : { status: IssueStatus.DRAFT, question: { not: UNDECIDED_QUESTION } },
+      ? { id: issueId, status: { in: EXTRACTABLE_STATUSES } }
+      : {
+          status: IssueStatus.DRAFT,
+          question: { not: UNDECIDED_QUESTION },
+          debateScore: { gte: debateThreshold },
+        },
+    orderBy: { debateScore: 'desc' },
     select: EXTRACT_ISSUE_SELECT,
   });
+  // 중복 표시가 없는 이슈부터, 논쟁성이 높은 순서로 상한만큼만 비싼 모델에 넘긴다.
+  const targets =
+    issueId === undefined ? sortDuplicateAwareIssues(issues).slice(0, exposeLimit) : issues;
+  // `--issue` 로 지정하면 중복이어도 보류하지 않는다(관리자가 직접 고른 이슈다).
+  const holds =
+    issueId === undefined
+      ? resolveDuplicateHolds(
+          targets,
+          await loadDuplicateTargets(prisma, collectDuplicateOfIssueIds(targets)),
+        )
+      : new Map<string, string>();
   const publishers = await prisma.publisher.findMany();
 
   let extracted = 0;
   let skipped = 0;
   const failed: string[] = [];
 
-  for (const issue of issues) {
+  for (const issue of targets) {
     const forced = issueId !== undefined;
     const hasClaims = issue.claims.length > 0;
+
+    // 요약 단계에서 이미 `[중복으로 보류]` 를 남겼으므로 여기서는 대상에서만 뺀다.
+    if (holds.has(issue.id)) {
+      skipped += 1;
+
+      continue;
+    }
 
     if (issue.articles.length === 0 || issue.question === UNDECIDED_QUESTION || (!forced && hasClaims)) {
       skipped += 1;
@@ -406,6 +458,7 @@ export const extractClaims = async ({
         articles: issue.articles,
         publishers,
         maxArticles,
+        digest: readClassificationDigest(issue.classification),
       });
 
       await prisma.$transaction(async (tx) => {

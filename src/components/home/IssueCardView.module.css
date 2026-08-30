@@ -67,6 +67,11 @@
   gap: 8px;
 }
 
+.emptyMessage {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
 .footer {
   display: flex;
   align-items: center;
@@ -85,6 +90,8 @@
   color: var(--color-ink);
 }
 
+/* 참여 문구가 없어도 CTA 가 오른쪽에 남도록 한다. */
 .cta {
   flex-shrink: 0;
+  margin-left: auto;
 }

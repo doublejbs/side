@@ -19,6 +19,10 @@ const CONTENT: Record<AdminMessage, AdminBannerContent> = {
     text: '승인했습니다. 이제 앱에 노출됩니다.',
   },
   [AdminMessage.REJECTED]: { tone: AdminBannerTone.SUCCESS, text: '반려했습니다.' },
+  [AdminMessage.RESTORED]: {
+    tone: AdminBannerTone.SUCCESS,
+    text: '검수 대상으로 복원했습니다. 초안 목록에서 확인할 수 있습니다.',
+  },
   [AdminMessage.REGENERATED]: {
     tone: AdminBannerTone.SUCCESS,
     text: '요약과 논점을 다시 생성했습니다.',
@@ -57,6 +61,10 @@ const CONTENT: Record<AdminMessage, AdminBannerContent> = {
     tone: AdminBannerTone.ERROR,
     text: '검수 대기 상태의 이슈만 승인할 수 있습니다.',
   },
+  [AdminMessage.ERROR_NOT_RESTORABLE]: {
+    tone: AdminBannerTone.ERROR,
+    text: '자동 제외되거나 반려된 이슈만 복원할 수 있습니다.',
+  },
   [AdminMessage.ERROR_EVIDENCE_MISMATCH]: {
     tone: AdminBannerTone.ERROR,
     text: '이 이슈에 속하지 않은 근거입니다.',
@@ -71,7 +79,7 @@ const CONTENT: Record<AdminMessage, AdminBannerContent> = {
   },
   [AdminMessage.ERROR_REGENERATE_NOT_ALLOWED]: {
     tone: AdminBannerTone.ERROR,
-    text: '발행됐거나 반려된 이슈는 다시 생성할 수 없습니다.',
+    text: '발행·반려·자동 제외된 이슈는 다시 생성할 수 없습니다.',
   },
   [AdminMessage.ERROR_REGENERATE_FAILED]: {
     tone: AdminBannerTone.ERROR,
