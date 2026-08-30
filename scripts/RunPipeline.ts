@@ -172,9 +172,39 @@ const formatDetail = (detail: unknown): string => {
     return String(detail);
   }
 
-  return Object.entries(detail as Record<string, unknown>)
+  const obj = detail as Record<string, unknown>;
+  const failed = obj.failed as unknown;
+  const failureCount = Array.isArray(failed) ? failed.length : 0;
+  const result = Object.entries(obj)
+    .filter(([key]) => key !== 'failed')
     .map(([key, value]) => `${key}=${String(value)}`)
     .join('  ');
+
+  if (failureCount > 0) {
+    return `${result}  failed=${failureCount}`;
+  }
+
+  return result;
+};
+
+const printFailureDetails = (failures: unknown[]): void => {
+  if (!Array.isArray(failures) || failures.length === 0) {
+    return;
+  }
+
+  const pipelineFailures = failures.filter(
+    (f) => f !== null && typeof f === 'object' && 'issueId' in f && 'message' in f,
+  );
+
+  if (pipelineFailures.length === 0) {
+    return;
+  }
+
+  console.log('\n실패 상세:');
+  pipelineFailures.forEach((failure) => {
+    const f = failure as { issueId: string; message: string };
+    console.log(`  ${f.issueId}: ${f.message}`);
+  });
 };
 
 const printOutcomes = (outcomes: StepOutcome[]): void => {
@@ -186,6 +216,10 @@ const printOutcomes = (outcomes: StepOutcome[]): void => {
   console.log('-'.repeat(60));
   outcomes.forEach((outcome) => {
     console.log(`${outcome.step.padEnd(11)} ${formatDetail(outcome.detail)}`);
+    const detail = outcome.detail as Record<string, unknown> | null;
+    if (detail && detail.failed) {
+      printFailureDetails(detail.failed as unknown[]);
+    }
   });
 };
 

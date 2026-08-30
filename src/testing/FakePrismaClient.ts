@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 
 /**
  * 테스트 전용 인메모리 Prisma 대역. 프로덕션 코드는 이 모듈을 import 하지 않는다
@@ -543,6 +543,25 @@ export const createFakePrismaClient = (seed: Partial<FakeDatabase> = {}): FakePr
 
         return { ...evidence };
       },
+      createMany: async ({ data }: { data: Prisma.EvidenceCreateInput[] }) => {
+        record('evidence', 'createMany', { data });
+
+        data.forEach((input: unknown) => {
+          const evidence = input as { type: string; source: string; date: Date; summary: string; url: string; articleId?: string | null; article?: { connect: { id: string } }; claim?: { connect: { id: string } } };
+          db.evidences.push({
+            id: nextId('evidence'),
+            claimId: evidence.claim?.connect.id ?? '',
+            type: evidence.type,
+            source: evidence.source,
+            date: evidence.date,
+            summary: evidence.summary,
+            url: evidence.url,
+            articleId: evidence.articleId ?? evidence.article?.connect.id ?? null,
+          });
+        });
+
+        return { count: data.length };
+      },
     },
     publisher: {
       findMany: async () => {
@@ -582,8 +601,8 @@ export const createFakePrismaClient = (seed: Partial<FakeDatabase> = {}): FakePr
         return { ...run };
       },
     },
-    $transaction: async (arg: unknown) => {
-      record('$transaction', 'call', {});
+    $transaction: async (arg: unknown, options?: unknown) => {
+      record('$transaction', 'call', { options });
 
       if (typeof arg === 'function') {
         return (arg as (tx: unknown) => Promise<unknown>)(client);

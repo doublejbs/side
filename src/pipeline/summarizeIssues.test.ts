@@ -307,7 +307,11 @@ describe('summarizeIssues', () => {
       issueId: 'issue-1',
     });
 
-    expect(failing).toEqual({ summarized: 0, skipped: 0, failed: ['issue-1'] });
+    expect(failing.summarized).toBe(0);
+    expect(failing.skipped).toBe(0);
+    expect(failing.failed).toHaveLength(1);
+    expect(failing.failed[0].issueId).toBe('issue-1');
+    expect(failing.failed[0].message).toContain('Error');
     expect(db.issues[0].question).toBe('주 4.5일제를 도입해야 할까?');
   });
 

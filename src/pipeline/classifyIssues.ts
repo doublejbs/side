@@ -2,6 +2,8 @@ import { IssueStatus, type Prisma, type PrismaClient } from '@prisma/client';
 
 import type { IssueClassification } from '@/domain/IssueClassification';
 import { ARTICLE_SELECT } from '@/pipeline/articleSelect';
+import type { PipelineFailure } from '@/pipeline/PipelineFailure';
+import { toPipelineFailure } from '@/pipeline/PipelineFailure';
 import {
   CLASSIFY_SCHEMA_NAME,
   classifySchema,
@@ -43,8 +45,8 @@ export interface ClassifyIssuesResult {
   autoRejected: number;
   /** 중복 가능 경고를 남긴 이슈 수. */
   duplicates: number;
-  /** LLM 호출·저장이 실패한 이슈 id. 나머지 이슈는 계속 처리한다. */
-  failed: string[];
+  /** LLM 호출·저장이 실패한 이슈. 나머지 이슈는 계속 처리한다. */
+  failed: PipelineFailure[];
 }
 
 /** 중복 판단에 참고할 기존 이슈를 찾는 기간. */
@@ -250,7 +252,7 @@ export const classifyIssues = async ({
   let passed = 0;
   let autoRejected = 0;
   let duplicates = 0;
-  const failed: string[] = [];
+  const failed: PipelineFailure[] = [];
 
   for (const issue of issues) {
     const forced = issueId !== undefined;
@@ -282,8 +284,10 @@ export const classifyIssues = async ({
       if (duplicate) {
         duplicates += 1;
       }
-    } catch {
-      failed.push(issue.id);
+    } catch (error) {
+      const failure = toPipelineFailure(issue.id, error);
+      failed.push(failure);
+      console.error(`[classify] 이슈 ${issue.id} 실패: ${failure.message}`);
     }
   }
 

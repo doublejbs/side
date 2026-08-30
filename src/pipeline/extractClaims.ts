@@ -5,6 +5,9 @@ import {
   toPrismaClaimSide,
   toPrismaEvidenceType,
 } from '@/data/PrismaEnumMappers';
+import type { PipelineFailure } from '@/pipeline/PipelineFailure';
+import { toPipelineFailure } from '@/pipeline/PipelineFailure';
+import { PIPELINE_TRANSACTION_OPTIONS } from '@/pipeline/transactionOptions';
 import type { ClaimSide } from '@/domain/ClaimSide';
 import { MEDIA_LEANING_ORDER } from '@/domain/mediaLeaningOrder';
 import type { MediaLeaning } from '@/domain/MediaLeaning';
@@ -60,8 +63,8 @@ interface ExtractClaimsDeps {
 export interface ExtractClaimsResult {
   extracted: number;
   skipped: number;
-  /** LLM 호출·저장이 실패한 이슈 id. 나머지 이슈는 계속 처리한다. */
-  failed: string[];
+  /** LLM 호출·저장이 실패한 이슈. 나머지 이슈는 계속 처리한다. */
+  failed: PipelineFailure[];
 }
 
 /** 이슈 조회에 쓰는 `select`. 기사 임베딩은 `ARTICLE_SELECT` 가 이미 제외한다. */
@@ -432,7 +435,7 @@ export const extractClaims = async ({
 
   let extracted = 0;
   let skipped = 0;
-  const failed: string[] = [];
+  const failed: PipelineFailure[] = [];
 
   for (const issue of targets) {
     const forced = issueId !== undefined;
@@ -461,13 +464,18 @@ export const extractClaims = async ({
         digest: readClassificationDigest(issue.classification),
       });
 
-      await prisma.$transaction(async (tx) => {
-        await applyClaimsDraft(tx, { issue, draft });
-      });
+      await prisma.$transaction(
+        async (tx) => {
+          await applyClaimsDraft(tx, { issue, draft });
+        },
+        PIPELINE_TRANSACTION_OPTIONS,
+      );
 
       extracted += 1;
-    } catch {
-      failed.push(issue.id);
+    } catch (error) {
+      const failure = toPipelineFailure(issue.id, error);
+      failed.push(failure);
+      console.error(`[extract] 이슈 ${issue.id} 실패: ${failure.message}`);
     }
   }
 

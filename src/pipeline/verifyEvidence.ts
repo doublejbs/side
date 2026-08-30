@@ -6,6 +6,9 @@ import {
   toPrismaEvidenceSupport,
   toPrismaEvidenceType,
 } from '@/data/PrismaEnumMappers';
+import type { PipelineFailure } from '@/pipeline/PipelineFailure';
+import { toPipelineFailure } from '@/pipeline/PipelineFailure';
+import { PIPELINE_TRANSACTION_OPTIONS } from '@/pipeline/transactionOptions';
 import { EvidenceSupport } from '@/domain/EvidenceSupport';
 import type { EvidenceVerdict } from '@/domain/EvidenceVerification';
 import { appendWarnings } from '@/pipeline/linkSources';
@@ -30,8 +33,8 @@ export interface VerifyEvidenceResult {
   verified: number;
   /** 미지지(무관·반박)로 판정된 근거 수. */
   flagged: number;
-  /** LLM 호출·저장이 실패한 이슈 id. 나머지 이슈는 계속 처리한다. */
-  failed: string[];
+  /** LLM 호출·저장이 실패한 이슈. 나머지 이슈는 계속 처리한다. */
+  failed: PipelineFailure[];
 }
 
 /** `--issue` 로 지정했을 때 허용하는 상태. 승인·반려된 이슈는 검증하지 않는다. */
@@ -247,7 +250,7 @@ export const verifyEvidence = async ({
 
   let verified = 0;
   let flagged = 0;
-  const failed: string[] = [];
+  const failed: PipelineFailure[] = [];
 
   for (const issue of issues) {
     if (countEvidences(issue) === 0) {
@@ -265,13 +268,16 @@ export const verifyEvidence = async ({
       );
       const verdicts = selectKnownVerdicts(draft.verdicts, knownIds);
 
-      flagged += await prisma.$transaction(async (tx) =>
-        applyVerificationDraft(tx, { issue, verdicts, now }),
+      flagged += await prisma.$transaction(
+        async (tx) => applyVerificationDraft(tx, { issue, verdicts, now }),
+        PIPELINE_TRANSACTION_OPTIONS,
       );
 
       verified += 1;
-    } catch {
-      failed.push(issue.id);
+    } catch (error) {
+      const failure = toPipelineFailure(issue.id, error);
+      failed.push(failure);
+      console.error(`[verify] 이슈 ${issue.id} 실패: ${failure.message}`);
     }
   }
 
