@@ -6,24 +6,28 @@ import { ClaimEditorListView } from '@/components/admin/ClaimEditorListView';
 import { IssueActionBarView } from '@/components/admin/IssueActionBarView';
 import { IssueBasicFieldsView } from '@/components/admin/IssueBasicFieldsView';
 import { IssueClassificationCardView } from '@/components/admin/IssueClassificationCardView';
+import { IssueMergeFormView } from '@/components/admin/IssueMergeFormView';
 import { MediaPerspectiveEditorView } from '@/components/admin/MediaPerspectiveEditorView';
 import { OpinionGroupEditorView } from '@/components/admin/OpinionGroupEditorView';
 import { ReviewArticleListView } from '@/components/admin/ReviewArticleListView';
 import { ISSUE_STATUS_LABEL } from '@/components/admin/adminLabels';
 import { formatAdminDate } from '@/components/admin/formatAdminDate';
 import { AdminFormField } from '@/server/AdminFormField';
-import type { AdminIssueDetail } from '@/server/AdminStore';
+import type { AdminIssueDetail, AdminMergeTarget } from '@/server/AdminStore';
 
 import styles from './IssueReviewFormView.module.css';
 
 interface Props {
   issue: AdminIssueDetail;
+  /** 병합 대상 후보(최근 30일 DRAFT·REVIEW·PUBLISHED). */
+  mergeTargets: AdminMergeTarget[];
   saveIssueAction: (formData: FormData) => Promise<void>;
   saveClaimAction: (formData: FormData) => Promise<void>;
   publishIssueAction: (formData: FormData) => Promise<void>;
   rejectIssueAction: (formData: FormData) => Promise<void>;
   restoreIssueAction: (formData: FormData) => Promise<void>;
   regenerateIssueAction: (formData: FormData) => Promise<void>;
+  mergeIssueAction: (formData: FormData) => Promise<void>;
   updateEvidenceTypeAction: (formData: FormData) => Promise<void>;
   deleteEvidenceAction: (formData: FormData) => Promise<void>;
 }
@@ -34,12 +38,14 @@ interface Props {
  */
 export const IssueReviewFormView = ({
   issue,
+  mergeTargets,
   saveIssueAction,
   saveClaimAction,
   publishIssueAction,
   rejectIssueAction,
   restoreIssueAction,
   regenerateIssueAction,
+  mergeIssueAction,
   updateEvidenceTypeAction,
   deleteEvidenceAction,
 }: Props) => (
@@ -66,6 +72,13 @@ export const IssueReviewFormView = ({
       topic={issue.topic}
       classifiedAt={issue.classifiedAt}
       verifiedAt={issue.verifiedAt}
+    />
+
+    <IssueMergeFormView
+      status={issue.status}
+      duplicateOfIssueId={issue.classification?.duplicateOfIssueId ?? null}
+      targets={mergeTargets}
+      mergeIssueAction={mergeIssueAction}
     />
 
     <IssueBasicFieldsView

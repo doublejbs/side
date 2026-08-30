@@ -1,5 +1,7 @@
 import { IssueStatus } from '@/domain/IssueStatus';
+import { computeCentroid } from '@/pipeline/computeCentroid';
 import {
+  MERGE_TARGET_WINDOW_DAYS,
   RESTORED_DEBATE_SCORE,
   type AdminClaimPatch,
   type AdminClaimPatchEntry,
@@ -7,11 +9,17 @@ import {
   type AdminIssueDetail,
   type AdminIssueListItem,
   type AdminIssuePatch,
+  type AdminMergeTarget,
   type AdminPublisher,
   type AdminPublisherInput,
   type AdminSearchQuery,
   type AdminStore,
 } from '@/server/AdminStore';
+import {
+  appendReviewNote,
+  mergedSourceNote,
+  mergedTargetNote,
+} from '@/server/mergeReviewNotes';
 
 export interface InMemoryAdminData {
   issues?: AdminIssueDetail[];
@@ -20,6 +28,15 @@ export interface InMemoryAdminData {
 }
 
 const clone = <T>(value: T): T => structuredClone(value);
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** 병합 대상으로 고를 수 있는 상태. Prisma 구현과 같은 목록으로 판단한다. */
+const MERGE_TARGET_STATUSES: IssueStatus[] = [
+  IssueStatus.DRAFT,
+  IssueStatus.REVIEW,
+  IssueStatus.PUBLISHED,
+];
 
 /**
  * 테스트와 목 모드(DB 미연결)에서 쓰는 인메모리 구현.
@@ -176,6 +193,68 @@ export class InMemoryAdminStore implements AdminStore {
 
     issue.status = IssueStatus.DRAFT;
     issue.debateScore = RESTORED_DEBATE_SCORE;
+  }
+
+  /** 연결 기사 임베딩 평균으로 centroid 를 다시 쓴다. 쓸 임베딩이 없으면 그대로 둔다. */
+  async recomputeCentroid(issueId: string): Promise<void> {
+    const issue = this.findIssue(issueId);
+
+    if (!issue) {
+      return;
+    }
+
+    const centroid = computeCentroid(
+      issue.articles.map((article) => article.embedding ?? []),
+    );
+
+    if (centroid.length === 0) {
+      return;
+    }
+
+    issue.centroid = centroid;
+  }
+
+  async hasCentroid(issueId: string): Promise<boolean> {
+    return (this.findIssue(issueId)?.centroid?.length ?? 0) > 0;
+  }
+
+  /** 인메모리 구현에는 트랜잭션이 없으므로 순차 처리한다. 반영 순서는 Prisma 구현과 같다. */
+  async mergeIssue(sourceId: string, targetId: string): Promise<{ movedArticles: number }> {
+    const source = this.findIssue(sourceId);
+    const target = this.findIssue(targetId);
+
+    if (!source || !target) {
+      return { movedArticles: 0 };
+    }
+
+    const movedArticles = source.articles.length;
+
+    target.articles = [...target.articles, ...source.articles];
+    source.articles = [];
+    source.status = IssueStatus.REJECTED;
+    source.reviewNote = appendReviewNote(source.reviewNote, mergedSourceNote(target.question));
+    target.reviewNote = appendReviewNote(
+      target.reviewNote,
+      mergedTargetNote(source.question, movedArticles),
+    );
+
+    await this.recomputeCentroid(target.id);
+
+    return { movedArticles };
+  }
+
+  async listMergeTargets(excludeIssueId: string): Promise<AdminMergeTarget[]> {
+    const since = new Date(Date.now() - MERGE_TARGET_WINDOW_DAYS * DAY_MS);
+
+    return this.issues
+      .filter(
+        (issue) =>
+          issue.id !== excludeIssueId &&
+          MERGE_TARGET_STATUSES.includes(issue.status) &&
+          issue.createdAt >= since,
+      )
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+      .map((issue) => ({ id: issue.id, question: issue.question, status: issue.status }));
   }
 
   async listQueries(): Promise<AdminSearchQuery[]> {

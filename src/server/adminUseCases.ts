@@ -73,6 +73,12 @@ export interface PublisherInput {
 /** 복원을 허용하는 상태. 검수 대상으로 되돌릴 수 있는 것은 제외된 이슈뿐이다. */
 const RESTORABLE_STATUSES: IssueStatus[] = [IssueStatus.AUTO_REJECTED, IssueStatus.REJECTED];
 
+/** 병합 대상이 될 수 없는 상태. 이미 걸러낸 이슈에 기사를 몰아넣지 않는다. */
+const MERGE_BLOCKED_TARGET_STATUSES: IssueStatus[] = [
+  IssueStatus.REJECTED,
+  IssueStatus.AUTO_REJECTED,
+];
+
 const MIN_SHARE = 0;
 
 const MAX_SHARE = 100;
@@ -283,9 +289,48 @@ export const publishIssue = async (
 
   await store.publishIssue(issue.id, slug);
 
+  // centroid 가 비어 있으면 cluster 단계가 이 이슈를 배정 대상으로 보지 않아,
+  // 같은 주제 실뉴스가 붙지 못하고 별도 이슈가 생긴다. 근거: `docs/PipelineTieringSpec.md` 11.1.
+  if (!(await store.hasCentroid(issue.id))) {
+    await store.recomputeCentroid(issue.id);
+  }
+
   revalidatePublicPages?.(PUBLIC_PAGE_TARGETS);
 
   return slug;
+};
+
+/**
+ * 중복 이슈 병합. 기사만 대상 이슈로 옮기고 원본은 반려 처리한다.
+ * 원본 주장·근거는 지우지 않고 원본에 남긴다. 근거: `docs/PipelineTieringSpec.md` 11.2.
+ */
+export const mergeIssue = async (
+  store: AdminStore,
+  sourceId: string,
+  targetId: string,
+): Promise<{ movedArticles: number }> => {
+  const source = await requireIssue(store, sourceId);
+
+  if (sourceId === targetId) {
+    throw new AdminActionError(AdminMessage.ERROR_MERGE_SELF);
+  }
+
+  // 발행 이슈를 병합하면 이미 쌓인 사용자 투표가 갈 곳을 잃는다. 먼저 반려해야 한다.
+  if (source.status === IssueStatus.PUBLISHED) {
+    throw new AdminActionError(AdminMessage.ERROR_MERGE_SOURCE_PUBLISHED);
+  }
+
+  const target = await store.getIssue(targetId);
+
+  if (!target) {
+    throw new AdminActionError(AdminMessage.ERROR_MERGE_TARGET_NOT_FOUND);
+  }
+
+  if (MERGE_BLOCKED_TARGET_STATUSES.includes(target.status)) {
+    throw new AdminActionError(AdminMessage.ERROR_MERGE_TARGET_REJECTED);
+  }
+
+  return store.mergeIssue(source.id, target.id);
 };
 
 /** 반려. 메모는 필수다. */

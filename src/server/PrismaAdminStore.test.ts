@@ -5,6 +5,9 @@ import { EvidenceSupport } from '@/domain/EvidenceSupport';
 import { EvidenceType } from '@/domain/EvidenceType';
 import type { IssueClassification } from '@/domain/IssueClassification';
 import { IssueStatus } from '@/domain/IssueStatus';
+import { PIPELINE_TRANSACTION_OPTIONS } from '@/pipeline/transactionOptions';
+import { AdminActionError } from '@/server/AdminActionError';
+import { AdminMessage } from '@/server/AdminMessage';
 import { RESTORED_DEBATE_SCORE } from '@/server/AdminStore';
 import { PrismaAdminStore } from '@/server/PrismaAdminStore';
 
@@ -217,6 +220,153 @@ describe('PrismaAdminStore.restoreIssue', () => {
         where: { id: 'issue-1' },
         data: { status: IssueStatus.DRAFT, debateScore: RESTORED_DEBATE_SCORE },
       },
+    ]);
+  });
+});
+
+interface FakeArticleRow {
+  id: string;
+  issueId: string | null;
+  embedding: number[];
+}
+
+/** 병합·centroid 질의만 흉내 내는 대역. 트랜잭션 콜백에는 자기 자신을 넘긴다. */
+const createFakeMergePrisma = (issues: FakeIssueRow[], articles: FakeArticleRow[]) => {
+  const updates: FakeUpdate[] = [];
+  const transactionOptions: unknown[] = [];
+
+  const client = {
+    issue: {
+      findUnique: async ({ where }: { where: { id: string } }) =>
+        issues.find((issue) => issue.id === where.id) ?? null,
+      findMany: async ({ where }: { where: { id?: { not?: string }; status?: { in?: string[] } } }) =>
+        issues.filter(
+          (issue) =>
+            issue.id !== where.id?.not && (where.status?.in ?? []).includes(issue.status),
+        ),
+      update: async (args: FakeUpdate) => {
+        updates.push(args);
+
+        const issue = issues.find((row) => row.id === args.where.id);
+
+        if (issue) {
+          Object.assign(issue, args.data);
+        }
+
+        return {};
+      },
+    },
+    article: {
+      findMany: async ({ where }: { where: { issueId: string } }) =>
+        articles.filter(
+          (article) => article.issueId === where.issueId && article.embedding.length > 0,
+        ),
+      updateMany: async ({
+        where,
+        data,
+      }: {
+        where: { issueId: string };
+        data: { issueId: string };
+      }) => {
+        const targets = articles.filter((article) => article.issueId === where.issueId);
+
+        targets.forEach((target) => {
+          target.issueId = data.issueId;
+        });
+
+        return { count: targets.length };
+      },
+    },
+    $transaction: async (run: (tx: unknown) => Promise<unknown>, options?: unknown) => {
+      transactionOptions.push(options);
+
+      return run(client);
+    },
+  };
+
+  return { prisma: client as unknown as PrismaClient, updates, transactionOptions };
+};
+
+describe('PrismaAdminStore.recomputeCentroid', () => {
+  it('연결 기사 임베딩 평균을 centroid 로 저장한다', async () => {
+    const { prisma, updates } = createFakeMergePrisma(
+      [createIssueRow()],
+      [
+        { id: 'a1', issueId: 'issue-1', embedding: [1, 0] },
+        { id: 'a2', issueId: 'issue-1', embedding: [0, 1] },
+      ],
+    );
+
+    await new PrismaAdminStore(prisma).recomputeCentroid('issue-1');
+
+    expect(updates).toEqual([{ where: { id: 'issue-1' }, data: { centroid: [0.5, 0.5] } }]);
+  });
+
+  it('임베딩 있는 기사가 없으면 아무것도 쓰지 않는다', async () => {
+    const { prisma, updates } = createFakeMergePrisma(
+      [createIssueRow()],
+      [{ id: 'a1', issueId: 'issue-1', embedding: [] }],
+    );
+
+    await new PrismaAdminStore(prisma).recomputeCentroid('issue-1');
+
+    expect(updates).toEqual([]);
+  });
+});
+
+describe('PrismaAdminStore.mergeIssue', () => {
+  const createStore = () =>
+    createFakeMergePrisma(
+      [
+        createIssueRow({ id: 'source', status: IssueStatus.DRAFT, question: '원본 질문', reviewNote: null }),
+        createIssueRow({ id: 'target', status: IssueStatus.REVIEW, question: '대상 질문', reviewNote: null }),
+      ],
+      [
+        { id: 'a1', issueId: 'source', embedding: [1, 0] },
+        { id: 'a2', issueId: 'source', embedding: [0, 1] },
+      ],
+    );
+
+  it('한 트랜잭션에서 기사 이동·반려·메모·centroid 재계산을 끝낸다', async () => {
+    const { prisma, updates, transactionOptions } = createStore();
+
+    const result = await new PrismaAdminStore(prisma).mergeIssue('source', 'target');
+
+    expect(result).toEqual({ movedArticles: 2 });
+    expect(transactionOptions).toEqual([PIPELINE_TRANSACTION_OPTIONS]);
+    expect(updates).toEqual([
+      {
+        where: { id: 'source' },
+        data: { status: IssueStatus.REJECTED, reviewNote: '[병합됨 → 대상 질문]' },
+      },
+      { where: { id: 'target' }, data: { reviewNote: '[병합 수신 ← 원본 질문, 기사 2건]' } },
+      { where: { id: 'target' }, data: { centroid: [0.5, 0.5] } },
+    ]);
+  });
+
+  it('없는 이슈면 찾을 수 없다고 알린다', async () => {
+    const { prisma, updates } = createStore();
+
+    await expect(new PrismaAdminStore(prisma).mergeIssue('source', 'missing')).rejects.toThrow(
+      new AdminActionError(AdminMessage.ERROR_NOT_FOUND),
+    );
+    expect(updates).toEqual([]);
+  });
+});
+
+describe('PrismaAdminStore.listMergeTargets', () => {
+  it('자기 자신을 빼고 DRAFT·REVIEW·PUBLISHED 만 돌려준다', async () => {
+    const { prisma } = createFakeMergePrisma(
+      [
+        createIssueRow({ id: 'self', status: IssueStatus.REVIEW }),
+        createIssueRow({ id: 'target', status: IssueStatus.DRAFT, question: '대상 질문' }),
+        createIssueRow({ id: 'rejected', status: IssueStatus.REJECTED }),
+      ],
+      [],
+    );
+
+    expect(await new PrismaAdminStore(prisma).listMergeTargets('self')).toEqual([
+      { id: 'target', question: '대상 질문', status: IssueStatus.DRAFT },
     ]);
   });
 });

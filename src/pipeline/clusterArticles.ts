@@ -1,5 +1,6 @@
 import { IssueStatus, type PrismaClient } from '@prisma/client';
 
+import { computeCentroid } from '@/pipeline/computeCentroid';
 import { cosineSimilarity } from '@/pipeline/cosineSimilarity';
 import type { EmbeddingClient } from '@/pipeline/EmbeddingClient';
 import { greedyCluster } from '@/pipeline/greedyCluster';
@@ -39,6 +40,8 @@ export interface ClusterArticlesResult {
   deferred: number;
   /** 기대 차원과 달라 건너뛴 기사 수 */
   skippedDimension: number;
+  /** centroid 가 비어 있어 연결 기사 평균으로 보정한 이슈 수 */
+  centroidBackfilled: number;
 }
 
 interface IssueCandidate {
@@ -80,6 +83,36 @@ const nextCentroid = (centroid: number[], vector: number[], articleCount: number
   }
 
   return centroid.map((value, index) => (value * articleCount + vector[index]) / (articleCount + 1));
+};
+
+/**
+ * centroid 가 빈 DRAFT/REVIEW/PUBLISHED 이슈를 연결 기사 임베딩 평균으로 채운다.
+ * 임베딩 있는 기사가 하나도 없는 이슈는 그대로 둔다. 근거: docs/PipelineTieringSpec.md 11.1.
+ */
+const backfillCentroids = async (prisma: PrismaClient): Promise<number> => {
+  const issues = await prisma.issue.findMany({
+    where: { status: { in: ASSIGNABLE_STATUSES }, centroid: { isEmpty: true } },
+    select: {
+      id: true,
+      articles: { where: { embedding: { isEmpty: false } }, select: { embedding: true } },
+    },
+  });
+
+  let backfilled = 0;
+
+  for (const issue of issues) {
+    const centroid = computeCentroid(issue.articles.map((article) => article.embedding));
+
+    if (centroid.length === 0) {
+      continue;
+    }
+
+    await prisma.issue.update({ where: { id: issue.id }, data: { centroid } });
+
+    backfilled += 1;
+  }
+
+  return backfilled;
 };
 
 /**
@@ -281,5 +314,10 @@ export const clusterArticles = async (deps: ClusterArticlesDeps): Promise<Cluste
     assigned += members.length;
   }
 
-  return { embedded, assigned, created, deferred, skippedDimension };
+  // (d) centroid 가 빈 이슈는 연결 기사 평균으로 보정한다.
+  // centroid 가 없으면 (b) 의 배정 후보로 뽑히지 않아, 시드·재생성 이슈에 같은 주제 실뉴스가
+  // 붙지 못하고 매번 새 이슈가 생긴다. 근거: docs/PipelineTieringSpec.md 11.1.
+  const centroidBackfilled = await backfillCentroids(prisma);
+
+  return { embedded, assigned, created, deferred, skippedDimension, centroidBackfilled };
 };

@@ -1,6 +1,7 @@
 /** 관리자 폼의 고정 필드 이름. 서버 액션과 뷰가 같은 값을 쓰도록 한곳에 모은다. */
 export enum AdminFormField {
   ISSUE_ID = 'issueId',
+  TARGET_ISSUE_ID = 'targetIssueId',
   QUESTION = 'question',
   TAGS = 'tags',
   SUMMARY = 'summary',

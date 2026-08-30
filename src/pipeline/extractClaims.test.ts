@@ -534,4 +534,31 @@ describe('extractClaims 중복 보류', () => {
     const txCall = calls.find((call) => call.model === '$transaction' && call.method === 'call');
     expect(txCall?.args).toHaveProperty('options');
   });
+
+  it('근거를 주장별 createMany로 배치 생성한다', async () => {
+    const { db, calls, prisma } = createFakePrismaClient(seed());
+
+    await extractClaims({ prisma, textClient: createTextClient() });
+
+    // createMany 호출 횟수 = 주장 수 (6개)
+    const createManyCalls = countCalls(calls, 'evidence', 'createMany');
+    expect(createManyCalls).toBe(6);
+
+    // 각 호출의 data 길이가 해당 주장의 근거 수와 같음
+    const createManyCallsDetail = calls.filter(
+      (call) => call.model === 'evidence' && call.method === 'createMany'
+    );
+
+    // EXTRACT_RESPONSE 기반: [0,1], [0,2], [1,2], [0,99(폐기)], [1,2], [0,1]
+    // 범위 밖 폐기 후: 2, 2, 2, 1, 2, 2
+    const expectedEvidenceCounts = [2, 2, 2, 1, 2, 2];
+
+    createManyCallsDetail.forEach((call, index) => {
+      const args = call.args as { data: unknown[] };
+      expect(args.data).toHaveLength(expectedEvidenceCounts[index]);
+    });
+
+    // 기존 테스트처럼 실제로 근거가 저장되었는지 확인
+    expect(db.evidences).toHaveLength(11); // 총 11개 근거
+  });
 });
