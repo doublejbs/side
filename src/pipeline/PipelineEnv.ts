@@ -1,3 +1,5 @@
+import { MAX_DEBATE_SCORE, MIN_DEBATE_SCORE } from '@/pipeline/ClassifySchema';
+import { InvalidEnvValueError } from '@/pipeline/InvalidEnvValueError';
 import { MissingEnvError } from '@/pipeline/MissingEnvError';
 
 /** `process.env` 처럼 문자열 값을 담은 환경 변수 원본. 테스트에서 대체할 수 있다. */
@@ -17,7 +19,10 @@ export interface PipelineEnv {
   ncpApigwApiKey: string;
   openAiApiKey: string;
   openAiTextModel: string;
+  openAiNanoModel: string;
   openAiEmbeddingModel: string;
+  debateThreshold: number;
+  exposeLimit: number;
 }
 
 export interface ReadPipelineEnvOptions {
@@ -36,15 +41,54 @@ export const ALL_REQUIRED_ENV_KEYS: PipelineEnvKey[] = [
 ];
 
 /**
- * 텍스트 생성 기본 모델.
+ * 텍스트 생성 기본 모델. 요약·논점 추출·근거 검증이 쓴다.
  * Structured Outputs 확장 제약(`minItems` 등)을 지원하는 모델이어야 한다.
  */
-export const DEFAULT_TEXT_MODEL = 'gpt-5-mini';
+export const DEFAULT_TEXT_MODEL = 'gpt-5.4-mini';
+
+/** 분류 전용 저가 모델. 넓게 걸러내는 classify 단계만 쓴다. */
+export const DEFAULT_NANO_MODEL = 'gpt-5.4-nano';
 
 /** 임베딩 기본 모델. */
 export const DEFAULT_EMBEDDING_MODEL = 'text-embedding-3-small';
 
+/** classify 통과 기준 점수. 미달 이슈는 자동 제외한다. */
+export const DEFAULT_DEBATE_THRESHOLD = 60;
+
+/** 실행 한 번에 요약·추출까지 진행할 이슈 수 상한. */
+export const DEFAULT_EXPOSE_LIMIT = 10;
+
+/** 노출 상한이 가질 수 있는 최댓값. 실수로 큰 값을 넣어 비용이 터지지 않게 막는다. */
+const MAX_EXPOSE_LIMIT = 100;
+
 const read = (source: EnvSource, key: string): string => (source[key] ?? '').trim();
+
+interface NumberRange {
+  min: number;
+  max: number;
+}
+
+/** 비어 있으면 기본값을 쓰고, 값이 있으면 정수인지와 범위를 확인한다. */
+const readNumber = (
+  source: EnvSource,
+  key: string,
+  fallback: number,
+  { min, max }: NumberRange,
+): number => {
+  const raw = read(source, key);
+
+  if (raw.length === 0) {
+    return fallback;
+  }
+
+  const parsed = Number(raw);
+
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    throw new InvalidEnvValueError(key, raw, `${min}~${max} 사이의 정수`);
+  }
+
+  return parsed;
+};
 
 /**
  * 파이프라인 CLI 가 쓰는 환경 변수를 읽는다.
@@ -68,6 +112,15 @@ export const readPipelineEnv = ({
     ncpApigwApiKey: read(source, PipelineEnvKey.NCP_APIGW_API_KEY),
     openAiApiKey: read(source, PipelineEnvKey.OPENAI_API_KEY),
     openAiTextModel: read(source, 'OPENAI_TEXT_MODEL') || DEFAULT_TEXT_MODEL,
+    openAiNanoModel: read(source, 'OPENAI_NANO_MODEL') || DEFAULT_NANO_MODEL,
     openAiEmbeddingModel: read(source, 'OPENAI_EMBEDDING_MODEL') || DEFAULT_EMBEDDING_MODEL,
+    debateThreshold: readNumber(source, 'PIPELINE_DEBATE_THRESHOLD', DEFAULT_DEBATE_THRESHOLD, {
+      min: MIN_DEBATE_SCORE,
+      max: MAX_DEBATE_SCORE,
+    }),
+    exposeLimit: readNumber(source, 'PIPELINE_EXPOSE_LIMIT', DEFAULT_EXPOSE_LIMIT, {
+      min: 1,
+      max: MAX_EXPOSE_LIMIT,
+    }),
   };
 };

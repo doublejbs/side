@@ -1,6 +1,8 @@
 import { IssueStatus, type Prisma, type PrismaClient } from '@prisma/client';
 
+import { issueClassificationSchema } from '@/data/IssueJsonSchemas';
 import { ARTICLE_SELECT } from '@/pipeline/articleSelect';
+import { DEFAULT_DEBATE_THRESHOLD, DEFAULT_EXPOSE_LIMIT } from '@/pipeline/PipelineEnv';
 import {
   selectPromptArticles,
   toPromptArticle,
@@ -13,6 +15,7 @@ import {
 } from '@/pipeline/SummarizeSchema';
 import type { TextClient } from '@/pipeline/TextClient';
 import { UNDECIDED_QUESTION } from '@/pipeline/UndecidedQuestion';
+import type { ClassificationDigest } from '@/pipeline/prompts/ClassificationDigest';
 import {
   buildSummarizeSystemPrompt,
   buildSummarizeUserPrompt,
@@ -24,6 +27,10 @@ interface SummarizeIssuesDeps {
   /** 지정하면 그 이슈만 다시 요약한다(관리자의 "요약 다시 생성"). */
   issueId?: string;
   maxArticles?: number;
+  /** 이 점수 미만인 이슈는 요약하지 않는다(classify 결과). */
+  debateThreshold?: number;
+  /** 한 번 실행에서 요약할 이슈 수 상한. `--issue` 를 지정하면 무시한다. */
+  exposeLimit?: number;
 }
 
 export interface SummarizeIssuesResult {
@@ -48,10 +55,26 @@ const SUMMARIZE_ISSUE_SELECT = {
   status: true,
   question: true,
   reviewNote: true,
+  classification: true,
   summarizedAt: true,
   summarizedArticleCount: true,
   articles: { select: ARTICLE_SELECT },
 } as const satisfies Prisma.IssueSelect;
+
+/**
+ * classify 가 뽑아 둔 쟁점 요지. 프롬프트의 "사전 추출 요지" 로 넘겨 기사 원문 의존을 줄인다.
+ * 아직 분류되지 않았거나 형식이 어긋나면 없는 것으로 다룬다.
+ * 근거: `docs/PipelineTieringSpec.md` 4.2장.
+ */
+export const readClassificationDigest = (value: unknown): ClassificationDigest | undefined => {
+  const parsed = issueClassificationSchema.safeParse(value);
+
+  if (!parsed.success) {
+    return undefined;
+  }
+
+  return { keySentences: parsed.data.keySentences, keyClaims: parsed.data.keyClaims };
+};
 
 /** 검수 중이던 이슈를 다시 요약했을 때 관리자에게 남기는 경고. */
 export const RESUMMARIZED_NOTE = '[재요약] 기사가 늘어 요약을 새로 만들었습니다. 다시 검수해 주세요.';
@@ -114,6 +137,7 @@ interface GenerateSummaryDraftParams {
   textClient: TextClient;
   articles: PipelineArticle[];
   maxArticles?: number;
+  digest?: ClassificationDigest;
 }
 
 /**
@@ -124,6 +148,7 @@ export const generateSummaryDraft = async ({
   textClient,
   articles,
   maxArticles = DEFAULT_MAX_ARTICLES,
+  digest,
 }: GenerateSummaryDraftParams): Promise<SummarizeResult> => {
   const selected = selectPromptArticles(articles, maxArticles);
 
@@ -131,7 +156,7 @@ export const generateSummaryDraft = async ({
     schema: summarizeSchema,
     schemaName: SUMMARIZE_SCHEMA_NAME,
     systemPrompt: buildSummarizeSystemPrompt(),
-    userPrompt: buildSummarizeUserPrompt(selected.map(toPromptArticle)),
+    userPrompt: buildSummarizeUserPrompt(selected.map(toPromptArticle), digest),
   });
 };
 
@@ -181,21 +206,29 @@ export const summarizeIssues = async ({
   textClient,
   issueId,
   maxArticles = DEFAULT_MAX_ARTICLES,
+  debateThreshold = DEFAULT_DEBATE_THRESHOLD,
+  exposeLimit = DEFAULT_EXPOSE_LIMIT,
 }: SummarizeIssuesDeps): Promise<SummarizeIssuesResult> => {
-  // `--issue` 로 하나를 지정해도 상태 제한은 유지한다. 승인·반려된 이슈를 파이프라인이 갈아 끼우지 않는다.
+  // `--issue` 로 하나를 지정해도 상태 제한은 유지한다(AUTO_REJECTED 제외).
+  // 승인·반려된 이슈를 파이프라인이 갈아 끼우지 않는다.
   const issues = await prisma.issue.findMany({
     where: {
       status: { in: SUMMARIZABLE_STATUSES },
-      ...(issueId === undefined ? {} : { id: issueId }),
+      ...(issueId === undefined
+        ? { debateScore: { gte: debateThreshold } }
+        : { id: issueId }),
     },
+    orderBy: { debateScore: 'desc' },
     select: SUMMARIZE_ISSUE_SELECT,
   });
+  // 논쟁성이 높은 이슈부터 상한만큼만 비싼 모델에 넘긴다.
+  const targets = issueId === undefined ? issues.slice(0, exposeLimit) : issues;
 
   let summarized = 0;
   let skipped = 0;
   const failed: string[] = [];
 
-  for (const issue of issues) {
+  for (const issue of targets) {
     const forced = issueId !== undefined;
     const articleCount = issue.articles.length;
 
@@ -206,7 +239,12 @@ export const summarizeIssues = async ({
     }
 
     try {
-      const draft = await generateSummaryDraft({ textClient, articles: issue.articles, maxArticles });
+      const draft = await generateSummaryDraft({
+        textClient,
+        articles: issue.articles,
+        maxArticles,
+        digest: readClassificationDigest(issue.classification),
+      });
 
       await applySummaryDraft(prisma, { issue, draft, articleCount });
 

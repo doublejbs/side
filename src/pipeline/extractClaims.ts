@@ -23,9 +23,15 @@ import {
   selectPromptArticles,
   toPromptArticle,
 } from '@/pipeline/selectPromptArticles';
-import { appendNoteLine, DEFAULT_MAX_ARTICLES } from '@/pipeline/summarizeIssues';
+import { DEFAULT_DEBATE_THRESHOLD, DEFAULT_EXPOSE_LIMIT } from '@/pipeline/PipelineEnv';
+import {
+  appendNoteLine,
+  DEFAULT_MAX_ARTICLES,
+  readClassificationDigest,
+} from '@/pipeline/summarizeIssues';
 import type { TextClient } from '@/pipeline/TextClient';
 import { UNDECIDED_QUESTION } from '@/pipeline/UndecidedQuestion';
+import type { ClassificationDigest } from '@/pipeline/prompts/ClassificationDigest';
 import {
   buildExtractSystemPrompt,
   buildExtractUserPrompt,
@@ -38,6 +44,10 @@ interface ExtractClaimsDeps {
   /** 지정하면 그 이슈의 기존 주장을 지우고 다시 만든다(관리자의 "요약 다시 생성"). */
   issueId?: string;
   maxArticles?: number;
+  /** 이 점수 미만인 이슈는 논점을 추출하지 않는다(classify 결과). */
+  debateThreshold?: number;
+  /** 한 번 실행에서 처리할 이슈 수 상한. `--issue` 를 지정하면 무시한다. */
+  exposeLimit?: number;
 }
 
 export interface ExtractClaimsResult {
@@ -53,9 +63,13 @@ const EXTRACT_ISSUE_SELECT = {
   status: true,
   question: true,
   reviewNote: true,
+  classification: true,
   articles: { select: ARTICLE_SELECT },
   claims: { select: { id: true } },
 } as const satisfies Prisma.IssueSelect;
+
+/** `--issue` 로 지정했을 때 허용하는 상태. 자동 제외·승인·반려된 이슈는 다시 추출하지 않는다. */
+const EXTRACTABLE_STATUSES = [IssueStatus.DRAFT, IssueStatus.REVIEW];
 
 interface PublisherRow {
   domain: string;
@@ -254,6 +268,7 @@ interface GenerateClaimsDraftParams {
   articles: PipelineArticleRow[];
   publishers: PublisherRow[];
   maxArticles?: number;
+  digest?: ClassificationDigest;
 }
 
 /**
@@ -266,6 +281,7 @@ export const generateClaimsDraft = async ({
   articles,
   publishers,
   maxArticles = DEFAULT_MAX_ARTICLES,
+  digest,
 }: GenerateClaimsDraftParams): Promise<ClaimsDraft> => {
   const lookup = buildLeaningLookup(publishers);
   const leaningOf = (article: PipelineArticleRow) => resolveLeaning(article, lookup);
@@ -288,6 +304,7 @@ export const generateClaimsDraft = async ({
       question,
       articles: selected.map(toPromptArticle),
       leaningGroups: buildLeaningGroups(selected, leaningOf),
+      digest,
     }),
   });
 
@@ -376,20 +393,29 @@ export const extractClaims = async ({
   textClient,
   issueId,
   maxArticles = DEFAULT_MAX_ARTICLES,
+  debateThreshold = DEFAULT_DEBATE_THRESHOLD,
+  exposeLimit = DEFAULT_EXPOSE_LIMIT,
 }: ExtractClaimsDeps): Promise<ExtractClaimsResult> => {
+  // `--issue` 를 지정하면 상한과 임계값을 무시하되, 자동 제외된 이슈는 되살리지 않는다.
   const issues = await prisma.issue.findMany({
     where: issueId
-      ? { id: issueId }
-      : { status: IssueStatus.DRAFT, question: { not: UNDECIDED_QUESTION } },
+      ? { id: issueId, status: { in: EXTRACTABLE_STATUSES } }
+      : {
+          status: IssueStatus.DRAFT,
+          question: { not: UNDECIDED_QUESTION },
+          debateScore: { gte: debateThreshold },
+        },
+    orderBy: { debateScore: 'desc' },
     select: EXTRACT_ISSUE_SELECT,
   });
+  const targets = issueId === undefined ? issues.slice(0, exposeLimit) : issues;
   const publishers = await prisma.publisher.findMany();
 
   let extracted = 0;
   let skipped = 0;
   const failed: string[] = [];
 
-  for (const issue of issues) {
+  for (const issue of targets) {
     const forced = issueId !== undefined;
     const hasClaims = issue.claims.length > 0;
 
@@ -406,6 +432,7 @@ export const extractClaims = async ({
         articles: issue.articles,
         publishers,
         maxArticles,
+        digest: readClassificationDigest(issue.classification),
       });
 
       await prisma.$transaction(async (tx) => {

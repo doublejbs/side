@@ -14,6 +14,8 @@ enum IssueStatus {
   REVIEW
   PUBLISHED
   REJECTED
+  /// classify 단계가 정책 논쟁이 아니라고 판단해 자동으로 제외한 이슈
+  AUTO_REJECTED
 }
 
 enum ClaimSide {
@@ -26,6 +28,14 @@ enum EvidenceType {
   RESEARCH
   EXPERT
   CLAIM
+}
+
+/// 근거가 주장을 지지하는 정도. verify 단계가 판정한다.
+enum EvidenceSupport {
+  SUPPORTS
+  PARTIAL
+  UNRELATED
+  CONTRADICTS
 }
 
 enum MediaLeaning {
@@ -109,11 +119,21 @@ model Issue {
   claims   Claim[]
   votes    Vote[]
 
-  reviewNote String?
+  reviewNote             String?
+  /// classify 가 매긴 정책 논쟁성 점수(0~100). 없으면 아직 분류된 적이 없다.
+  debateScore            Int?
+  /// classify 가 부여한 주제 태그 1개. 예: '노동', '에너지'
+  topic                  String?
+  /// IssueClassification (docs/PipelineTieringSpec.md 3장)
+  classification         Json?
+  /// 마지막으로 분류(4.1)에 성공한 시각.
+  classifiedAt           DateTime?
+  /// 마지막으로 근거 검증(4.3)에 성공한 시각.
+  verifiedAt             DateTime?
   /// 마지막으로 요약(4.3)을 성공한 시각. 없으면 아직 요약된 적이 없다.
-  summarizedAt DateTime?
+  summarizedAt           DateTime?
   /// 마지막 요약 시점의 기사 수. 재요약 판단의 분모다.
-  summarizedArticleCount Int @default(0)
+  summarizedArticleCount Int       @default(0)
 
   publishedAt DateTime?
   createdAt   DateTime  @default(now())
@@ -144,6 +164,11 @@ model Evidence {
   date    DateTime
   summary String
   url     String
+
+  /// verify 가 판정한 주장 지지 여부. 없으면 아직 검증된 적이 없다.
+  support          EvidenceSupport?
+  /// verify 가 남긴 한 줄 판정 근거.
+  verificationNote String?
 
   articleId String?
   article   Article? @relation(fields: [articleId], references: [id])

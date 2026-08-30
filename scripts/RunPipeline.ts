@@ -3,6 +3,7 @@ import 'dotenv/config';
 import type { PrismaClient } from '@prisma/client';
 
 import { getPrismaClient } from '../src/data/PrismaClient';
+import { classifyIssues } from '../src/pipeline/classifyIssues';
 import { clusterArticles } from '../src/pipeline/clusterArticles';
 import { collectArticles } from '../src/pipeline/collectArticles';
 import { createDryRunNewsClient, createDryRunTextClient } from '../src/pipeline/DryRunClients';
@@ -16,57 +17,36 @@ import { createNaverNewsClient } from '../src/pipeline/NaverNewsClient';
 import { createOpenAiEmbeddingClient } from '../src/pipeline/OpenAiEmbeddingClient';
 import { createOpenAiTextClient } from '../src/pipeline/OpenAiTextClient';
 import { parsePipelineArgs } from '../src/pipeline/parsePipelineArgs';
-import { PipelineEnvKey, readPipelineEnv } from '../src/pipeline/PipelineEnv';
+import { PipelineEnvKey, readPipelineEnv, type PipelineEnv } from '../src/pipeline/PipelineEnv';
 import { withPipelineRun } from '../src/pipeline/PipelineRunLogger';
 import { PipelineStep } from '../src/pipeline/PipelineStep';
+import {
+  ALL_STEPS,
+  collectRequiredEnvKeys,
+  type RunnableStep,
+} from '../src/pipeline/PipelineStepPlan';
 import { summarizeIssues } from '../src/pipeline/summarizeIssues';
 import type { TextClient } from '../src/pipeline/TextClient';
+import { verifyEvidence } from '../src/pipeline/verifyEvidence';
 
 /**
  * 파이프라인 CLI. `npm run pipeline -- [단계] [--issue <id>] [--dry-run]`
  * 근거: `docs/PipelineSpec.md` 4장.
  */
 
-/** 실제로 실행되는 단계. `ALL` 은 `main` 에서 미리 풀어 놓는다. */
-type RunnableStep = Exclude<PipelineStep, PipelineStep.ALL>;
-
 /** 단계마다 필요한 클라이언트만 만들도록 생성을 미룬다. */
 interface StepClients {
   newsClient: () => NaverNewsClient;
   embeddingClient: () => EmbeddingClient;
   textClient: () => TextClient;
+  /** 분류 전용 저가 모델 클라이언트. */
+  nanoTextClient: () => TextClient;
 }
 
 interface StepOutcome {
   step: RunnableStep;
   detail: unknown;
 }
-
-/** `all` 이 실행하는 순서. */
-const ALL_STEPS: RunnableStep[] = [
-  PipelineStep.COLLECT,
-  PipelineStep.CLUSTER,
-  PipelineStep.SUMMARIZE,
-  PipelineStep.EXTRACT,
-  PipelineStep.LINK,
-];
-
-/** 단계별로 실제로 필요한 환경 변수. 실행하지 않는 단계의 키는 검사하지 않는다. */
-const REQUIRED_ENV_BY_STEP: Record<RunnableStep, PipelineEnvKey[]> = {
-  [PipelineStep.COLLECT]: [
-    PipelineEnvKey.DATABASE_URL,
-    PipelineEnvKey.NCP_APIGW_API_KEY_ID,
-    PipelineEnvKey.NCP_APIGW_API_KEY,
-  ],
-  [PipelineStep.CLUSTER]: [PipelineEnvKey.DATABASE_URL, PipelineEnvKey.OPENAI_API_KEY],
-  [PipelineStep.SUMMARIZE]: [PipelineEnvKey.DATABASE_URL, PipelineEnvKey.OPENAI_API_KEY],
-  [PipelineStep.EXTRACT]: [PipelineEnvKey.DATABASE_URL, PipelineEnvKey.OPENAI_API_KEY],
-  [PipelineStep.LINK]: [PipelineEnvKey.DATABASE_URL],
-};
-
-const collectRequiredEnvKeys = (steps: RunnableStep[]): PipelineEnvKey[] => [
-  ...new Set(steps.flatMap((step) => REQUIRED_ENV_BY_STEP[step])),
-];
 
 /** 처음 쓸 때 한 번만 만들고 그다음부터는 같은 인스턴스를 돌려준다. */
 const lazily = <T>(create: () => T): (() => T) => {
@@ -81,19 +61,23 @@ const lazily = <T>(create: () => T): (() => T) => {
   };
 };
 
-const createClients = (steps: RunnableStep[], dryRun: boolean): StepClients => {
+/** 실행할 단계에 필요한 변수만 검사해 환경을 읽는다. dry-run 은 DB 연결 정보만 있으면 된다. */
+const readEnvForSteps = (steps: RunnableStep[], dryRun: boolean): PipelineEnv =>
+  readPipelineEnv({
+    requires: dryRun ? [PipelineEnvKey.DATABASE_URL] : collectRequiredEnvKeys(steps),
+  });
+
+const createClients = (env: PipelineEnv, dryRun: boolean): StepClients => {
   if (dryRun) {
-    // dry-run 은 외부 호출을 하지 않으므로 DB 연결 정보만 있으면 된다.
-    readPipelineEnv({ requires: [PipelineEnvKey.DATABASE_URL] });
+    const dryRunTextClient = lazily(createDryRunTextClient);
 
     return {
       newsClient: lazily(createDryRunNewsClient),
       embeddingClient: lazily(createFakeEmbeddingClient),
-      textClient: lazily(createDryRunTextClient),
+      textClient: dryRunTextClient,
+      nanoTextClient: dryRunTextClient,
     };
   }
-
-  const env = readPipelineEnv({ requires: collectRequiredEnvKeys(steps) });
 
   return {
     newsClient: lazily(() =>
@@ -114,14 +98,27 @@ const createClients = (steps: RunnableStep[], dryRun: boolean): StepClients => {
         model: env.openAiTextModel,
       }),
     ),
+    nanoTextClient: lazily(() =>
+      createOpenAiTextClient({
+        apiKey: env.openAiApiKey,
+        model: env.openAiNanoModel,
+      }),
+    ),
   };
 };
+
+/** 실행마다 달라지는 임계값. 환경 변수로만 조정한다. */
+interface StepOptions {
+  debateThreshold: number;
+  exposeLimit: number;
+}
 
 const runStep = async (
   step: RunnableStep,
   prisma: PrismaClient,
   clients: StepClients,
   issueId: string | undefined,
+  options: StepOptions,
 ): Promise<unknown> => {
   switch (step) {
     case PipelineStep.COLLECT:
@@ -130,11 +127,34 @@ const runStep = async (
     case PipelineStep.CLUSTER:
       return clusterArticles({ prisma, embeddingClient: clients.embeddingClient() });
 
+    case PipelineStep.CLASSIFY:
+      return classifyIssues({
+        prisma,
+        nanoTextClient: clients.nanoTextClient(),
+        issueId,
+        debateThreshold: options.debateThreshold,
+      });
+
     case PipelineStep.SUMMARIZE:
-      return summarizeIssues({ prisma, textClient: clients.textClient(), issueId });
+      return summarizeIssues({
+        prisma,
+        textClient: clients.textClient(),
+        issueId,
+        debateThreshold: options.debateThreshold,
+        exposeLimit: options.exposeLimit,
+      });
 
     case PipelineStep.EXTRACT:
-      return extractClaims({ prisma, textClient: clients.textClient(), issueId });
+      return extractClaims({
+        prisma,
+        textClient: clients.textClient(),
+        issueId,
+        debateThreshold: options.debateThreshold,
+        exposeLimit: options.exposeLimit,
+      });
+
+    case PipelineStep.VERIFY:
+      return verifyEvidence({ prisma, textClient: clients.textClient(), issueId });
 
     case PipelineStep.LINK:
       return linkSources({ prisma, issueId });
@@ -172,7 +192,8 @@ const printOutcomes = (outcomes: StepOutcome[]): void => {
 const main = async (): Promise<void> => {
   const args = parsePipelineArgs(process.argv.slice(2));
   const steps = args.step === PipelineStep.ALL ? ALL_STEPS : [args.step];
-  const clients = createClients(steps, args.dryRun);
+  const env = readEnvForSteps(steps, args.dryRun);
+  const clients = createClients(env, args.dryRun);
   const prisma = getPrismaClient();
 
   if (!prisma) {
@@ -188,7 +209,10 @@ const main = async (): Promise<void> => {
   try {
     for (const step of steps) {
       const detail = await withPipelineRun(prisma, step, () =>
-        runStep(step, prisma, clients, args.issueId),
+        runStep(step, prisma, clients, args.issueId, {
+          debateThreshold: env.debateThreshold,
+          exposeLimit: env.exposeLimit,
+        }),
       );
 
       outcomes.push({ step, detail });

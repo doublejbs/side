@@ -1,6 +1,7 @@
 import {
   ClaimFeedback as PrismaClaimFeedback,
   ClaimSide as PrismaClaimSide,
+  EvidenceSupport as PrismaEvidenceSupport,
   EvidenceType as PrismaEvidenceType,
   IssueStatus as PrismaIssueStatus,
   MediaLeaning as PrismaMediaLeaning,
@@ -10,6 +11,7 @@ import {
 import { UnknownEnumValueError } from '@/data/UnknownEnumValueError';
 import { ClaimFeedback } from '@/domain/ClaimFeedback';
 import { ClaimSide } from '@/domain/ClaimSide';
+import { EvidenceSupport } from '@/domain/EvidenceSupport';
 import { EvidenceType } from '@/domain/EvidenceType';
 import { IssueStatus } from '@/domain/IssueStatus';
 import { MediaLeaning } from '@/domain/MediaLeaning';
@@ -46,6 +48,10 @@ export const toPrismaClaimSide = createEnumMapper('ClaimSide', PrismaClaimSide);
 export const toDomainEvidenceType = createEnumMapper('EvidenceType', EvidenceType);
 
 export const toPrismaEvidenceType = createEnumMapper('EvidenceType', PrismaEvidenceType);
+
+export const toDomainEvidenceSupport = createEnumMapper('EvidenceSupport', EvidenceSupport);
+
+export const toPrismaEvidenceSupport = createEnumMapper('EvidenceSupport', PrismaEvidenceSupport);
 
 export const toDomainMediaLeaning = createEnumMapper('MediaLeaning', MediaLeaning);
 

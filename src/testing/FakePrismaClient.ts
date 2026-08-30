@@ -33,6 +33,9 @@ export interface FakeEvidenceRow {
   summary: string;
   url: string;
   articleId: string | null;
+  /** verify 판정. 아직 검증되지 않았으면 없다. */
+  support?: string | null;
+  verificationNote?: string | null;
 }
 
 export interface FakeClaimRow {
@@ -57,6 +60,11 @@ export interface FakeIssueRow {
   opinionGroups: unknown;
   centroid: number[];
   reviewNote: string | null;
+  debateScore: number | null;
+  topic: string | null;
+  classification: unknown;
+  classifiedAt: Date | null;
+  verifiedAt: Date | null;
   summarizedAt: Date | null;
   summarizedArticleCount: number;
   publishedAt: Date | null;
@@ -109,6 +117,8 @@ interface IssueWhere {
   status?: string | { in?: string[] };
   question?: { not?: string };
   createdAt?: { gte?: Date };
+  debateScore?: { gte?: number };
+  verifiedAt?: null | { not?: null };
   articles?: { some?: { publishedAt?: { gte?: Date } } };
 }
 
@@ -160,6 +170,11 @@ export const createFakeIssueRow = (overrides: Partial<FakeIssueRow> & { id: stri
   opinionGroups: [],
   centroid: [],
   reviewNote: null,
+  debateScore: null,
+  topic: null,
+  classification: null,
+  classifiedAt: null,
+  verifiedAt: null,
   summarizedAt: null,
   summarizedArticleCount: 0,
   publishedAt: null,
@@ -223,6 +238,21 @@ const matchesIssue = (
     return false;
   }
 
+  if (
+    where.debateScore?.gte !== undefined &&
+    (issue.debateScore === null || issue.debateScore < where.debateScore.gte)
+  ) {
+    return false;
+  }
+
+  if (where.verifiedAt === null && issue.verifiedAt !== null) {
+    return false;
+  }
+
+  if (where.verifiedAt && where.verifiedAt.not === null && issue.verifiedAt === null) {
+    return false;
+  }
+
   const publishedAtGte = where.articles?.some?.publishedAt?.gte;
 
   if (
@@ -283,7 +313,17 @@ const compareBy = <T extends object>(rows: T[], orderBy: OrderBy): T[] => {
   return [...rows].sort((left, right) => {
     const a = (left as Record<string, unknown>)[field];
     const b = (right as Record<string, unknown>)[field];
-    const delta = a instanceof Date && b instanceof Date ? a.getTime() - b.getTime() : Number(a) - Number(b);
+
+    if (a instanceof Date && b instanceof Date) {
+      const gap = a.getTime() - b.getTime();
+
+      return direction === 'desc' ? -gap : gap;
+    }
+
+    // 값이 없는 행(예: 아직 분류되지 않아 debateScore 가 null)은 항상 뒤로 보낸다.
+    const left0 = typeof a === 'number' ? a : Number.NEGATIVE_INFINITY;
+    const right0 = typeof b === 'number' ? b : Number.NEGATIVE_INFINITY;
+    const delta = left0 - right0;
 
     return direction === 'desc' ? -delta : delta;
   });
@@ -308,7 +348,15 @@ export const createFakePrismaClient = (seed: Partial<FakeDatabase> = {}): FakePr
   const articlesOf = (issueId: string): FakeArticleRow[] =>
     db.articles.filter((article) => article.issueId === issueId);
 
-  const evidencesOf = (claimId: string) => db.evidences.filter((evidence) => evidence.claimId === claimId);
+  const evidencesOf = (claimId: string) =>
+    db.evidences
+      .filter((evidence) => evidence.claimId === claimId)
+      .map((evidence) => ({
+        ...evidence,
+        support: evidence.support ?? null,
+        verificationNote: evidence.verificationNote ?? null,
+        article: db.articles.find((article) => article.id === evidence.articleId) ?? null,
+      }));
 
   const withRelations = (issue: FakeIssueRow) => ({
     ...issue,
@@ -388,13 +436,19 @@ export const createFakePrismaClient = (seed: Partial<FakeDatabase> = {}): FakePr
       },
     },
     issue: {
-      findMany: async ({ where, orderBy }: { where?: IssueWhere; orderBy?: OrderBy } = {}) => {
-        record('issue', 'findMany', { where, orderBy });
+      findMany: async ({
+        where,
+        orderBy,
+        take,
+      }: { where?: IssueWhere; orderBy?: OrderBy; take?: number } = {}) => {
+        record('issue', 'findMany', { where, orderBy, take });
 
-        return compareBy(
+        const rows = compareBy(
           db.issues.filter((issue) => matchesIssue(issue, where, articlesOf)),
           orderBy,
         ).map(withRelations);
+
+        return take === undefined ? rows : rows.slice(0, take);
       },
       findUnique: async ({ where }: { where: IssueWhere }) => {
         record('issue', 'findUnique', { where });
@@ -469,6 +523,21 @@ export const createFakePrismaClient = (seed: Partial<FakeDatabase> = {}): FakePr
         });
 
         return { ...claim };
+      },
+    },
+    evidence: {
+      update: async ({ where, data }: { where: { id: string }; data: Partial<FakeEvidenceRow> }) => {
+        record('evidence', 'update', { where, data });
+
+        const evidence = db.evidences.find((row) => row.id === where.id);
+
+        if (!evidence) {
+          throw new Error(`근거를 찾을 수 없다: ${where.id}`);
+        }
+
+        Object.assign(evidence, data);
+
+        return { ...evidence };
       },
     },
     publisher: {

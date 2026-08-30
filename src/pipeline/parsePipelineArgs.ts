@@ -9,7 +9,7 @@ export interface PipelineArgs {
 }
 
 export const PIPELINE_USAGE =
-  'npm run pipeline -- [collect|cluster|summarize|extract|link|all] [--issue <id>] [--dry-run]';
+  'npm run pipeline -- [collect|cluster|classify|summarize|extract|verify|link|all] [--issue <id>] [--dry-run]';
 
 const STEP_BY_NAME = new Map<string, PipelineStep>(
   Object.values(PipelineStep).map((step) => [step.toLowerCase(), step]),

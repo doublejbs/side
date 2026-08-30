@@ -1,14 +1,15 @@
 # SIDE 실데이터 파이프라인 스펙
 
 > 전제: `docs/Spec.md`(MVP 화면·도메인)를 그대로 유지하면서 목 데이터를 실데이터로 대체한다.
-> 흐름: **뉴스 수집 → 같은 이슈 묶기 → 이슈 요약 → 찬성/반대 논점 추출 → 출처 연결 → 관리자 검수 → 앱 API → 여론 투표**
+> 흐름: **뉴스 수집 → 같은 이슈 묶기 → 이슈 분류 → 이슈 요약 → 찬성/반대 논점 추출 → 근거 검증 → 출처 연결 → 관리자 검수 → 앱 API → 여론 투표**
+> 모델 티어링(classify·verify 단계, 저가 모델로 넓게 거르고 고가 모델은 노출 후보에만)은 `docs/PipelineTieringSpec.md` 를 따른다.
 
 ## 1. 결정 사항
 
 | 항목 | 선택 |
 |---|---|
 | 뉴스 소스 | 네이버 뉴스 검색 API (NAVER API HUB, `GET https://naverapihub.apigw.ntruss.com/search/v1/news`) |
-| LLM | OpenAI API — 임베딩 `text-embedding-3-small`, 생성 `gpt-5-mini`(환경변수로 교체 가능) |
+| LLM | OpenAI API — 임베딩 `text-embedding-3-small`, 생성 `gpt-5.4-mini`, 분류 `gpt-5.4-nano`(환경변수로 교체 가능) |
 | DB | Postgres + Prisma ORM. 로컬은 `docker compose`(postgres:16), 운영은 Supabase 등 `DATABASE_URL` |
 | 관리자 | 같은 Next 앱의 `/admin`, `ADMIN_PASSWORD` 기반 세션 쿠키 |
 | 투표 | 서버 저장(`Vote` 테이블) + 익명 식별자 쿠키. 내 선택은 localStorage에도 유지 |
@@ -20,11 +21,24 @@ DATABASE_URL=postgresql://side:side@localhost:5432/side
 NCP_APIGW_API_KEY_ID=
 NCP_APIGW_API_KEY=
 OPENAI_API_KEY=
-OPENAI_TEXT_MODEL=gpt-5-mini
+OPENAI_TEXT_MODEL=gpt-5.4-mini
+OPENAI_NANO_MODEL=gpt-5.4-nano
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+PIPELINE_DEBATE_THRESHOLD=60
+PIPELINE_EXPOSE_LIMIT=10
 ADMIN_PASSWORD=
 ANON_COOKIE_SECRET=
 ```
+
+| 변수 | 기본값 | 쓰는 단계 |
+|---|---|---|
+| `OPENAI_TEXT_MODEL` | `gpt-5.4-mini` | summarize · extract · verify |
+| `OPENAI_NANO_MODEL` | `gpt-5.4-nano` | classify |
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | cluster |
+| `PIPELINE_DEBATE_THRESHOLD` | `60` | classify 통과 점수(0~100). 미달은 `AUTO_REJECTED` |
+| `PIPELINE_EXPOSE_LIMIT` | `10` | 실행 1회의 summarize·extract 대상 상한(점수 내림차순) |
+
+숫자 변수는 정수·범위를 검사하고 어긋나면 `InvalidEnvValueError` 로 즉시 종료한다(`PipelineEnv.ts`).
 
 `DATABASE_URL`이 없으면 앱은 기존 목 데이터(`src/data/issues`)로 동작한다(폴백). 파이프라인 CLI는 **실행할 단계에 필요한** 필수 변수가 없으면 즉시 종료하며 무엇이 빠졌는지 모아서 출력한다(`PipelineEnv.ts`·`MissingEnvError.ts`).
 
@@ -151,9 +165,9 @@ model PipelineRun {             // 실행 이력·관측
 
 ## 4. 파이프라인 (`src/pipeline/`)
 
-CLI: `npm run pipeline -- [collect|cluster|summarize|extract|link|all] [--issue <id>] [--dry-run]` (`scripts/RunPipeline.ts`, `tsx` 실행). 각 단계는 멱등이며 `PipelineRun`에 기록한다. 인자는 `parsePipelineArgs.ts`가 읽는다.
+CLI: `npm run pipeline -- [collect|cluster|classify|summarize|extract|verify|link|all] [--issue <id>] [--dry-run]` (`scripts/RunPipeline.ts`, `tsx` 실행). 각 단계는 멱등이며 `PipelineRun`에 기록한다. 인자는 `parsePipelineArgs.ts`가 읽는다.
 
-- `--issue <id>`: 그 이슈 하나만 처리한다(`summarize`·`extract`·`link`). `--issue=<id>` 형태도 된다.
+- `--issue <id>`: 그 이슈 하나만 처리한다(`classify`·`summarize`·`extract`·`verify`·`link`). `--issue=<id>` 형태도 된다.
 - `--dry-run`: 외부 호출 없이 가짜 뉴스·임베딩·텍스트 클라이언트(`DryRunClients.ts`, `FakeEmbeddingClient.ts`)로 실행한다. `DATABASE_URL`만 있으면 된다.
 - 환경 변수는 **실행할 단계에 필요한 것만** 검사한다(`readPipelineEnv({ requires })`). 예: `link`는 `DATABASE_URL`만, `collect`는 `NAVER_*`까지, 나머지 LLM 단계는 `OPENAI_API_KEY`까지.
 
@@ -176,14 +190,18 @@ CLI: `npm run pipeline -- [collect|cluster|summarize|extract|link|all] [--issue 
 - 결과: `{ embedded, assigned, created, deferred, skippedDimension }`.
 - 순수 함수 `cosineSimilarity.ts`, `greedyCluster.ts`는 단위 테스트.
 
+### 4.1a 분류 `classify` — `classifyIssues.ts` (nano)
+임베딩 클러스터링은 "같은 사건"은 묶지만 "정책 논쟁인가"는 가리지 못한다. 그래서 요약·추출 앞에 저가 모델(`OPENAI_NANO_MODEL`) 단계를 둔다. 대상은 `status=DRAFT` 이면서 아직 분류되지 않았거나 분류 이후 기사가 더 붙은 이슈다. 이슈 기사 최대 40건과 최근 30일 이슈 목록(중복 판단용, 최대 50개)을 넣고 `IssueClassification`(`isPolicyDebate`·`debateScore`·`topic`·`reason`·`entities`·`keySentences`·`keyClaims`·`duplicateOfIssueId`)을 받아 `debateScore`·`topic`·`classification`·`classifiedAt` 에 저장한다. 정책 논쟁이 아니거나 점수가 `PIPELINE_DEBATE_THRESHOLD` 에 못 미치면 `status=AUTO_REJECTED` 로 넘기고 `reviewNote` 에 `[자동 제외] {reason}` 을 남긴다. 중복 후보는 `[중복 가능] {질문}` 경고만 남기고 자동으로 병합하지 않는다. 자세한 내용은 `docs/PipelineTieringSpec.md` 4.1장.
+
 ### 4.3 요약 `summarize` — `summarizeIssues.ts`
-- 대상: `status`가 `DRAFT` 또는 `REVIEW`인 이슈(검수 중에도 기사가 늘면 다시 요약한다).
+- 대상: `status`가 `DRAFT` 또는 `REVIEW`이고 `debateScore >= PIPELINE_DEBATE_THRESHOLD` 인 이슈(검수 중에도 기사가 늘면 다시 요약한다). 점수 내림차순으로 `PIPELINE_EXPOSE_LIMIT` 개까지만 처리한다. `--issue` 를 지정하면 임계값·상한을 무시하되 `AUTO_REJECTED` 는 제외한다.
 - 다시 요약하는 조건(셋 중 하나): `question === '(미정)'`(`UndecidedQuestion.ts`) · `summarizedAt == null` · `articleCount >= summarizedArticleCount * 1.3`(마지막 요약 이후 기사가 30% 이상 늘었다). 기사가 하나도 없으면 건너뛴다.
 - 성공하면 `summarizedAt`·`summarizedArticleCount`를 이번 요약에 쓴 기사 수로 갱신한다.
 - `REVIEW` 이슈가 다시 요약되면 상태는 그대로 두고 `reviewNote`에 `[재요약]` 경고 한 줄만 덧붙인다(관리자가 다시 검수하게 한다).
 - 이슈 단위로 try/catch 한다. 하나가 실패해도 나머지는 계속 처리하고 실패한 id 를 결과의 `failed: string[]`에 담는다.
 - LLM 호출(`generateSummaryDraft`)과 저장(`applySummaryDraft`)이 분리돼 있다. 검증된 초안을 받은 뒤에만 DB를 건드리므로, 생성이 실패하면 기존 요약이 그대로 남는다.
 - 입력: 기사 제목·설명·매체·날짜 최대 40건. 출력(구조화, zod): `question`(질문형, `?` 종결, 30자 이내), `tags`(2개), `summary`(3~5문장, 사실 중심·설득 금지), `keyPoints`(4개 `{title, question}`).
+- 분류 결과(`classification.keySentences`·`keyClaims`)가 있으면 사용자 프롬프트 앞에 "사전 추출 요지" 로 붙인다(기사 입력은 유지).
 - 프롬프트 원칙(브리프 3·22장): 중립, 사실/주장 구분, 클릭베이트 금지, 특정 매체·정치인 평가 금지.
 - OpenAI 호출은 `TextClient.ts` 경계 뒤에 둔다. 시그니처는 인자 하나짜리 객체다.
 
@@ -207,10 +225,13 @@ CLI: `npm run pipeline -- [collect|cluster|summarize|extract|link|all] [--issue 
 - 이슈 조회는 임베딩(1536차원 배열)을 제외한 `select`로 한다. 요약과 마찬가지로 이슈 단위 try/catch 이며 결과에 `failed: string[]`을 담는다. 생성(`generateClaimsDraft`)과 저장(`applyClaimsDraft`)이 분리돼 있어, 생성이 실패하면 기존 주장이 그대로 남는다.
 - `leaning`은 **`Publisher` 테이블(관리자가 `/admin/publishers`에서 성향 지정)**로 결정하고 LLM에는 성향별로 그룹핑된 기사만 넘긴다. 성향이 지정되지 않은 매체는 `CENTRIST`로 채우지 않고 **언론 관점 집계에서 제외**한다(브리프 14장: 매체 평가 느낌 금지 — 코드에 성향 판단을 박지 않는다). `publisherDirectory.ts`는 도메인→매체명 초기 시드일 뿐 성향을 담지 않는다.
 
+### 4.5a 근거 검증 `verify` — `verifyEvidence.ts` (mini)
+`extract` 가 만든 근거가 실제로 그 주장을 지지하는지 다시 판정한다. 대상은 `status=DRAFT` 이고 `verifiedAt` 이 없는 이슈(`--issue` 지정 시 DRAFT·REVIEW). 주장별 근거를 요약과 원문 기사 제목·설명까지 묶어 넣고 `EvidenceVerdict[]`(`evidenceId`·`support`·`type`·`note`)를 받는다. `evidenceId` 는 입력으로 준 근거 id 여야 하며 모르는 id 는 버린다. 판정은 `Evidence.support`·`verificationNote`·`type` 에 저장하고, 무관·반박 근거도 **삭제하지 않고** `reviewNote` 에 `[근거 검증] 주장 "{제목}": 미지지 {n}건` 을 누적한다(지지+부분이 2건 미만이면 경고 한 줄 더). 마지막에 `verifiedAt` 을 갱신한다. 앱 응답에서는 `IssueMapper` 가 무관·반박 근거를 제외한다. 자세한 내용은 `docs/PipelineTieringSpec.md` 4.3장.
+
 ### 4.5 출처 연결 `link` — `linkSources.ts`
 근거 생성은 4.4에서 끝난다. 이 단계는 **검증과 상태 전환만** 맡는다.
 
-- 대상: `status=DRAFT`이면서 주장이 하나라도 있는 이슈. 주장이 하나도 없으면 추출이 끝나지 않은 것이므로 다음 실행으로 미룬다. 주장이 6개(찬 3 + 반 3)에 못 미쳐도 검수로 넘기고 경고만 남긴다 — DRAFT 에 조용히 남아 사라지는 편이 더 나쁘다.
+- 대상: `status=DRAFT`이고 `verifiedAt`이 있으면서 주장이 하나라도 있는 이슈(근거 검증 전에는 검수로 넘기지 않는다). 주장이 하나도 없으면 추출이 끝나지 않은 것이므로 다음 실행으로 미룬다. 주장이 6개(찬 3 + 반 3)에 못 미쳐도 검수로 넘기고 경고만 남긴다 — DRAFT 에 조용히 남아 사라지는 편이 더 나쁘다.
 - 검증해 경고를 모은다(`collectIssueWarnings`, 순수 함수): 근거가 2개 미만인 주장 · 이 이슈에 속하지 않는 기사를 가리키는 근거 · 한쪽 주장이 3개 미만.
 - 경고는 기존 `reviewNote` 아래에 덧붙이고(`appendWarnings`), 경고가 있어도 `status=REVIEW`로 넘겨 관리자가 검수 화면에서 보게 한다.
 
@@ -232,6 +253,7 @@ CLI: `npm run pipeline -- [collect|cluster|summarize|extract|link|all] [--issue 
 - **요약 다시 생성**(`regenerateIssue.ts`)의 규칙:
   - `status`가 `DRAFT`·`REVIEW`가 아니면 `RegenerateNotAllowedError`를 던진다. 이미 공개·반려된 이슈의 주장을 말없이 갈아 끼우지 않는다. 화면에서도 그 상태에서는 버튼을 비활성으로 두고 이유를 적는다.
   - 먼저 LLM 결과(요약·논점)를 **메모리로** 모두 받아 검증하고, 성공했을 때만 한 트랜잭션에서 기존 주장 삭제 → 새 주장 저장 → 이슈 갱신 → `status=REVIEW`를 한다. 실패하면 DB는 전혀 바뀌지 않는다.
+  - 분류(classify)는 그대로 두고 요약 → 추출 → 검증 → 연결만 다시 실행한다. 근거 id 는 주장을 저장한 뒤에야 정해지므로 검증은 저장 트랜잭션 뒤에 이어서 돈다.
   - `reviewNote`는 지우지 않고 `[재생성 YYYY-MM-DD]` 줄을 덧붙인다.
   - 서버 액션은 Prisma를 직접 참조하지 않고 `src/server/getPipelineDeps.ts` 경계(prisma + textClient, 없으면 `null`)를 통해 호출한다. `AdminStore`는 이 책임을 갖지 않는다.
 - `/admin/queries`: 수집 키워드 추가/비활성화.
@@ -266,6 +288,7 @@ CLI: `npm run pipeline -- [collect|cluster|summarize|extract|link|all] [--issue 
 
 - 순수 함수: `stripHtml`, `parsePubDate`, `cosineSimilarity`, `greedyCluster`, `publisherDirectory` 조회, `IssueMapper`, 분포 집계.
 - 클라이언트 모킹: `NaverNewsClient`(fetch 모킹: 정상/429 재시도/HTML 제거), `summarizeIssues`·`extractClaims`(`FakeTextClient`가 고정 JSON 반환 → zod 검증·`articleIndex` 범위 처리), `linkSources`(근거 수·범위·주장 수 경고).
+- 모델 티어링: `classifySchema`·`verifySchema` zod 경계, `classifyIssues`(통과·자동 제외·중복 경고·존재하지 않는 중복 id 무시·실패 격리), `verifyEvidence`(판정 저장·경고 누적·삭제하지 않음·모르는 id 무시), `summarizeIssues`·`extractClaims` 대상 조건(임계값·노출 상한·`AUTO_REJECTED` 제외), `linkSources`의 `verifiedAt` 조건, `IssueMapper` 미지지 근거 제외, `PrismaEnumMappers` `AUTO_REJECTED`·`EvidenceSupport`, `PipelineStepPlan` 단계 순서·단계별 필수 env, `PipelineEnv` 숫자 변수 범위 검증.
 - API 라우트: Prisma 클라이언트를 인터페이스(`VoteStore` — `src/server/VoteStore.ts`)로 감싸 인메모리 구현(`InMemoryVoteStore.ts`)으로 테스트(투표 upsert, 분포 집계, 쿠키 발급).
 - 관리자: 로그인 쿠키 서명/검증 단위 테스트, 승인 시 slug 생성 규칙 테스트.
 - 테스트 대역은 `src/testing/`에 모은다(`FakePrismaClient.ts` — 파이프라인·관리자 코드가 실제로 쓰는 질의만 흉내 내는 인메모리 Prisma 대역). 프로덕션 코드는 이 디렉터리를 import 하지 않는다.
@@ -280,7 +303,7 @@ cp .env.example .env            # 키 채우기
 npm run db:migrate              # 스키마 적용 (개발 중 스키마 변경은 npx prisma migrate dev)
 npm run db:seed                 # 목 데이터 5이슈 + 기본 검색 키워드 + 매체 테이블 시드 (PUBLISHED)
                                 # 데모 분포가 필요하면 `npm run db:seed -- --with-demo-votes`
-npm run pipeline -- all         # 수집→묶기→요약→추출→연결
+npm run pipeline -- all         # 수집→묶기→분류→요약→추출→검증→연결
 npm run dev                     # /admin 에서 검수 → 승인
 ```
 

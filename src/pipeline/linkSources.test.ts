@@ -7,6 +7,7 @@ import {
   type FakeClaimRow,
   type FakeDatabase,
   type FakeEvidenceRow,
+  type FakeIssueRow,
 } from '@/testing/FakePrismaClient';
 import { appendWarnings, collectIssueWarnings, linkSources } from '@/pipeline/linkSources';
 
@@ -45,8 +46,15 @@ const twoEvidencesEach = (): FakeEvidenceRow[] =>
     evidenceRow(`e${index}-2`, claim.id, 'a2'),
   ]);
 
+const VERIFIED_AT = new Date('2026-08-26T00:00:00.000Z');
+
+/** 근거 검증까지 끝난 이슈. link 대상 조건(`verifiedAt != null`)을 만족한다. */
+const createVerifiedIssueRow = (
+  overrides: Partial<FakeIssueRow> & { id: string },
+): FakeIssueRow => createFakeIssueRow({ verifiedAt: VERIFIED_AT, ...overrides });
+
 const seed = (overrides: Partial<FakeDatabase> = {}): Partial<FakeDatabase> => ({
-  issues: [createFakeIssueRow({ id: 'issue-1', question: '주 4.5일제를 도입해야 할까?' })],
+  issues: [createVerifiedIssueRow({ id: 'issue-1', question: '주 4.5일제를 도입해야 할까?' })],
   articles: [
     createFakeArticleRow({ id: 'a1', issueId: 'issue-1' }),
     createFakeArticleRow({ id: 'a2', issueId: 'issue-1' }),
@@ -159,7 +167,7 @@ describe('linkSources', () => {
   it('기존 검수 메모를 유지한다', async () => {
     const { db, prisma } = createFakePrismaClient(
       seed({
-        issues: [createFakeIssueRow({ id: 'issue-1', question: '질문?', reviewNote: '이전 메모' })],
+        issues: [createVerifiedIssueRow({ id: 'issue-1', question: '질문?', reviewNote: '이전 메모' })],
         evidences: [evidenceRow('e1', 'c1', 'a1')],
       }),
     );
@@ -190,7 +198,7 @@ describe('linkSources', () => {
 
   it('DRAFT 가 아닌 이슈는 대상이 아니다', async () => {
     const { db, prisma } = createFakePrismaClient(
-      seed({ issues: [createFakeIssueRow({ id: 'issue-1', status: 'REVIEW', question: '질문?' })] }),
+      seed({ issues: [createVerifiedIssueRow({ id: 'issue-1', status: 'REVIEW', question: '질문?' })] }),
     );
 
     const result = await linkSources({ prisma });
@@ -199,13 +207,24 @@ describe('linkSources', () => {
     expect(db.issues[0].reviewNote).toBeNull();
   });
 
+  it('근거 검증 전 이슈는 검수로 넘기지 않는다', async () => {
+    const { db, prisma } = createFakePrismaClient(
+      seed({ issues: [createFakeIssueRow({ id: 'issue-1', question: '질문?' })] }),
+    );
+
+    const result = await linkSources({ prisma });
+
+    expect(result).toEqual({ reviewed: 0, warnings: 0 });
+    expect(db.issues[0].status).toBe('DRAFT');
+  });
+
   it('issueId 를 지정하면 그 이슈만 검사한다', async () => {
     const base = seed();
     const { db, prisma } = createFakePrismaClient({
       ...base,
       issues: [
-        createFakeIssueRow({ id: 'issue-1', question: '질문?' }),
-        createFakeIssueRow({ id: 'issue-2', question: '다른 질문?' }),
+        createVerifiedIssueRow({ id: 'issue-1', question: '질문?' }),
+        createVerifiedIssueRow({ id: 'issue-2', question: '다른 질문?' }),
       ],
     });
 

@@ -96,8 +96,13 @@ export const appendWarnings = (reviewNote: string | null, warnings: string[]): s
  * 경고가 있어도 상태는 넘기고, 관리자가 검수 화면에서 보도록 메모에 남긴다.
  */
 export const linkSources = async ({ prisma, issueId }: LinkSourcesDeps): Promise<LinkSourcesResult> => {
+  // 근거 검증(verify)이 끝난 이슈만 검수로 넘긴다. 검증 전에 REVIEW 로 올리지 않는다.
   const issues = await prisma.issue.findMany({
-    where: { status: IssueStatus.DRAFT, ...(issueId === undefined ? {} : { id: issueId }) },
+    where: {
+      status: IssueStatus.DRAFT,
+      verifiedAt: { not: null },
+      ...(issueId === undefined ? {} : { id: issueId }),
+    },
     include: { articles: { select: { id: true } }, claims: { include: { evidences: true } } },
   });
 

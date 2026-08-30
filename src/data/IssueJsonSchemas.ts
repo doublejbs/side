@@ -26,6 +26,18 @@ export const mediaPerspectivesSchema = z.array(
   }),
 );
 
+/** classify 가 저장한 `Issue.classification` 을 읽을 때 검증한다. 근거: `docs/PipelineTieringSpec.md` 3장. */
+export const issueClassificationSchema = z.object({
+  isPolicyDebate: z.boolean(),
+  debateScore: z.number(),
+  topic: z.string(),
+  reason: z.string(),
+  entities: z.array(z.string()),
+  keySentences: z.array(z.string()),
+  keyClaims: z.array(z.string()),
+  duplicateOfIssueId: z.string().optional(),
+});
+
 export const opinionGroupsSchema = z.array(
   z.object({
     id: z.string(),

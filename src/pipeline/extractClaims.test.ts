@@ -11,8 +11,17 @@ import {
   createFakeIssueRow,
   createFakePrismaClient,
   type FakeDatabase,
+  type FakeIssueRow,
 } from '@/testing/FakePrismaClient';
 import { createFakeTextClient } from '@/pipeline/FakeTextClient';
+
+const CLASSIFIED_AT = new Date('2026-08-21T00:00:00.000Z');
+
+/** classify 를 통과한 이슈. 추출 대상 조건(debateScore ≥ 임계값)을 만족한다. */
+const createClassifiedIssueRow = (
+  overrides: Partial<FakeIssueRow> & { id: string },
+): FakeIssueRow =>
+  createFakeIssueRow({ debateScore: 80, classifiedAt: CLASSIFIED_AT, ...overrides });
 
 const claimOf = (side: ClaimSide, index: number, articleIndexes: number[]) => ({
   side,
@@ -70,7 +79,7 @@ const EXTRACT_RESPONSE = {
 const createTextClient = () => createFakeTextClient({ [EXTRACT_SCHEMA_NAME]: [EXTRACT_RESPONSE] });
 
 const seed = (): Partial<FakeDatabase> => ({
-  issues: [createFakeIssueRow({ id: 'issue-1', question: '주 4.5일제를 도입해야 할까?' })],
+  issues: [createClassifiedIssueRow({ id: 'issue-1', question: '주 4.5일제를 도입해야 할까?' })],
   articles: [
     createFakeArticleRow({
       id: 'a1',
@@ -315,7 +324,7 @@ describe('extractClaims', () => {
     const base = seed();
     const { prisma } = createFakePrismaClient({
       ...base,
-      issues: [createFakeIssueRow({ id: 'issue-1' })],
+      issues: [createClassifiedIssueRow({ id: 'issue-1' })],
     });
 
     const result = await extractClaims({ prisma, textClient: createTextClient() });
@@ -330,5 +339,82 @@ describe('extractClaims', () => {
     const result = await extractClaims({ prisma, textClient: createTextClient() });
 
     expect(result).toEqual({ extracted: 0, skipped: 1, failed: [] });
+  });
+
+  it('논쟁성 점수가 임계값에 못 미치는 이슈는 대상에서 빠진다', async () => {
+    const base = seed();
+    const { prisma } = createFakePrismaClient({
+      ...base,
+      issues: [
+        createClassifiedIssueRow({ id: 'issue-1', question: '질문?', debateScore: 30 }),
+      ],
+    });
+    const textClient = createTextClient();
+
+    const result = await extractClaims({ prisma, textClient });
+
+    expect(result).toEqual({ extracted: 0, skipped: 0, failed: [] });
+    expect(textClient.requests).toHaveLength(0);
+  });
+
+  it('issueId 를 지정해도 자동 제외된 이슈는 되살리지 않는다', async () => {
+    const base = seed();
+    const { db, prisma } = createFakePrismaClient({
+      ...base,
+      issues: [
+        createClassifiedIssueRow({ id: 'issue-1', question: '질문?', status: 'AUTO_REJECTED' }),
+      ],
+    });
+
+    const result = await extractClaims({ prisma, textClient: createTextClient(), issueId: 'issue-1' });
+
+    expect(result).toEqual({ extracted: 0, skipped: 0, failed: [] });
+    expect(db.claims).toHaveLength(0);
+  });
+
+  it('점수가 높은 이슈부터 노출 상한만큼만 추출한다', async () => {
+    const base = seed();
+    const { db, prisma } = createFakePrismaClient({
+      ...base,
+      issues: [
+        createClassifiedIssueRow({ id: 'issue-low', question: '낮은 점수 질문?', debateScore: 65 }),
+        createClassifiedIssueRow({ id: 'issue-1', question: '높은 점수 질문?', debateScore: 95 }),
+      ],
+    });
+
+    const result = await extractClaims({ prisma, textClient: createTextClient(), exposeLimit: 1 });
+
+    expect(result.extracted).toBe(1);
+    expect(db.claims.every((claim) => claim.issueId === 'issue-1')).toBe(true);
+  });
+
+  it('분류가 뽑아 둔 사전 추출 요지를 프롬프트에 넣는다', async () => {
+    const base = seed();
+    const { prisma } = createFakePrismaClient({
+      ...base,
+      issues: [
+        createClassifiedIssueRow({
+          id: 'issue-1',
+          question: '주 4.5일제를 도입해야 할까?',
+          classification: {
+            isPolicyDebate: true,
+            debateScore: 80,
+            topic: '노동',
+            reason: '노동시간 제도 변경에 찬반이 갈린다.',
+            entities: ['국회'],
+            keySentences: ['적용 범위가 쟁점이다.', '중소기업 부담이 쟁점이다.', '임금 보전이 쟁점이다.'],
+            keyClaims: ['삶의 질이 좋아진다', '비용이 늘어난다', '생산성이 관건이다'],
+          },
+        }),
+      ],
+    });
+    const textClient = createTextClient();
+
+    await extractClaims({ prisma, textClient });
+
+    const { userPrompt } = textClient.requests[0];
+
+    expect(userPrompt).toContain('사전 추출 요지');
+    expect(userPrompt).toContain('- 주장: 비용이 늘어난다');
   });
 });

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import { CLASSIFY_SCHEMA_NAME, classifySchema } from '@/pipeline/ClassifySchema';
 import { createDryRunNewsClient, createDryRunTextClient } from '@/pipeline/DryRunClients';
 import { EXTRACT_SCHEMA_NAME, extractSchema } from '@/pipeline/ExtractSchema';
 import { SUMMARIZE_SCHEMA_NAME, summarizeSchema } from '@/pipeline/SummarizeSchema';
+import { VERIFY_SCHEMA_NAME, verifySchema } from '@/pipeline/VerifySchema';
 
 /**
  * dry-run 고정 응답이 실제 스키마를 통과하는지 지킨다.
@@ -21,6 +23,33 @@ describe('createDryRunTextClient', () => {
 
     expect(result.question.endsWith('?')).toBe(true);
     expect(result.keyPoints).toHaveLength(4);
+  });
+
+  it('고정 분류 응답이 classifySchema 를 통과한다', async () => {
+    const client = createDryRunTextClient();
+
+    const result = await client.generateStructured({
+      schema: classifySchema,
+      schemaName: CLASSIFY_SCHEMA_NAME,
+      systemPrompt: '시스템',
+      userPrompt: '사용자',
+    });
+
+    expect(result.isPolicyDebate).toBe(true);
+    expect(result.keySentences.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('고정 검증 응답이 verifySchema 를 통과한다', async () => {
+    const client = createDryRunTextClient();
+
+    const result = await client.generateStructured({
+      schema: verifySchema,
+      schemaName: VERIFY_SCHEMA_NAME,
+      systemPrompt: '시스템',
+      userPrompt: '사용자',
+    });
+
+    expect(result.verdicts).toHaveLength(1);
   });
 
   it('고정 논점 응답이 extractSchema 를 통과한다', async () => {

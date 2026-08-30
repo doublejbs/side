@@ -1,4 +1,8 @@
 import { ARTICLE_INJECTION_GUARD, wrapArticles } from '@/pipeline/prompts/ArticleBoundary';
+import {
+  formatClassificationDigest,
+  type ClassificationDigest,
+} from '@/pipeline/prompts/ClassificationDigest';
 import { NEUTRALITY_PRINCIPLES } from '@/pipeline/prompts/NeutralityPrinciples';
 import { formatPromptArticles, type PromptArticle } from '@/pipeline/prompts/PromptArticle';
 
@@ -23,8 +27,12 @@ export const buildSummarizeSystemPrompt = (): string =>
   ].join('\n');
 
 /** 이슈 요약 사용자 프롬프트. 기사 목록은 최신순으로 정렬해 넘긴다. */
-export const buildSummarizeUserPrompt = (articles: PromptArticle[]): string =>
+export const buildSummarizeUserPrompt = (
+  articles: PromptArticle[],
+  digest?: ClassificationDigest,
+): string =>
   [
+    ...formatClassificationDigest(digest),
     `다음은 같은 이슈로 묶인 기사 ${articles.length}건이다(최신순).`,
     ARTICLE_INJECTION_GUARD,
     '',

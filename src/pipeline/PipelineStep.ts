@@ -2,8 +2,10 @@
 export enum PipelineStep {
   COLLECT = 'COLLECT',
   CLUSTER = 'CLUSTER',
+  CLASSIFY = 'CLASSIFY',
   SUMMARIZE = 'SUMMARIZE',
   EXTRACT = 'EXTRACT',
+  VERIFY = 'VERIFY',
   LINK = 'LINK',
   ALL = 'ALL',
 }

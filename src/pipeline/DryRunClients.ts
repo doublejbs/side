@@ -1,15 +1,33 @@
 import { ClaimSide } from '@/domain/ClaimSide';
+import { EvidenceSupport } from '@/domain/EvidenceSupport';
 import { EvidenceType } from '@/domain/EvidenceType';
+import { CLASSIFY_SCHEMA_NAME } from '@/pipeline/ClassifySchema';
 import { EXTRACT_SCHEMA_NAME } from '@/pipeline/ExtractSchema';
 import { createFakeTextClient } from '@/pipeline/FakeTextClient';
 import type { NaverNewsClient } from '@/pipeline/NaverNewsClient';
 import { SUMMARIZE_SCHEMA_NAME } from '@/pipeline/SummarizeSchema';
 import type { TextClient } from '@/pipeline/TextClient';
+import { VERIFY_SCHEMA_NAME } from '@/pipeline/VerifySchema';
 
 /**
  * `--dry-run` 이 쓰는 가짜 클라이언트 모음.
  * 외부 호출 없이 파이프라인 전체가 도는지만 확인하는 용도이며, 내용은 자리표시자다.
  */
+
+const DRY_RUN_CLASSIFICATION = {
+  isPolicyDebate: true,
+  debateScore: 70,
+  topic: '시험',
+  reason: 'dry-run 실행에서 만든 자리표시자 판정이다.',
+  entities: ['자리표시자 기관'],
+  keySentences: [
+    '이것은 dry-run 이 만든 자리표시자 쟁점 문장이다.',
+    '실제 모델을 호출하지 않았다.',
+    '검수 화면에서 반드시 다시 생성해야 한다.',
+  ],
+  keyClaims: ['자리표시자 주장 1', '자리표시자 주장 2', '자리표시자 주장 3'],
+  duplicateOfIssueId: null,
+};
 
 const DRY_RUN_SUMMARY = {
   question: '이 이슈를 어떻게 볼까?',
@@ -60,11 +78,28 @@ const DRY_RUN_EXTRACT = {
   opinionGroups: [dryRunGroup(34), dryRunGroup(33), dryRunGroup(33)],
 };
 
+/**
+ * 근거 검증은 입력으로 받은 근거 id 를 알아야 하지만, dry-run 은 외부 호출 없이 도는지만 본다.
+ * 존재하지 않는 id 는 `verifyEvidence` 가 버리므로 자리표시자 판정 하나만 돌려준다.
+ */
+const DRY_RUN_VERIFY = {
+  verdicts: [
+    {
+      evidenceId: 'dry-run-evidence',
+      support: EvidenceSupport.SUPPORTS,
+      type: EvidenceType.FACT,
+      note: 'dry-run 실행에서 만든 자리표시자 판정이다.',
+    },
+  ],
+};
+
 /** 고정 응답만 돌려주는 텍스트 클라이언트. */
 export const createDryRunTextClient = (): TextClient =>
   createFakeTextClient({
+    [CLASSIFY_SCHEMA_NAME]: [DRY_RUN_CLASSIFICATION],
     [SUMMARIZE_SCHEMA_NAME]: [DRY_RUN_SUMMARY],
     [EXTRACT_SCHEMA_NAME]: [DRY_RUN_EXTRACT],
+    [VERIFY_SCHEMA_NAME]: [DRY_RUN_VERIFY],
   });
 
 /** 네트워크를 쓰지 않는 뉴스 클라이언트. 항상 빈 결과를 돌려준다. */

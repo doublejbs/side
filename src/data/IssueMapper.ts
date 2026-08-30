@@ -3,8 +3,13 @@ import {
   mediaPerspectivesSchema,
   opinionGroupsSchema,
 } from '@/data/IssueJsonSchemas';
-import { toDomainClaimSide, toDomainEvidenceType } from '@/data/PrismaEnumMappers';
+import {
+  toDomainClaimSide,
+  toDomainEvidenceSupport,
+  toDomainEvidenceType,
+} from '@/data/PrismaEnumMappers';
 import { ClaimSide } from '@/domain/ClaimSide';
+import { EvidenceSupport } from '@/domain/EvidenceSupport';
 import type {
   Claim,
   Evidence,
@@ -23,6 +28,8 @@ export interface EvidenceRow {
   date: Date;
   summary: string;
   url: string;
+  /** verify 판정. 아직 검증되지 않았으면 `null`. */
+  support?: string | null;
 }
 
 /** Prisma `Claim` 행 + 근거. 설득됐어요 수는 관계 카운트로 받는다(피드백 행 전량 조회 금지). */
@@ -97,6 +104,17 @@ const parseOpinionGroups = (value: unknown): OpinionGroup[] => {
   return parsed.success ? parsed.data : [];
 };
 
+/** 앱에 내보내지 않는 판정. 관리자가 지우지 않았더라도 사용자 화면에서는 빼고 보여준다. */
+const UNSUPPORTED_SUPPORTS: string[] = [EvidenceSupport.UNRELATED, EvidenceSupport.CONTRADICTS];
+
+/**
+ * 검증에서 무관·반박으로 판정된 근거는 앱 응답에서 제외한다.
+ * 아직 검증되지 않은 근거(`support` 없음)는 그대로 내보낸다.
+ * 근거: `docs/PipelineTieringSpec.md` 6장.
+ */
+const isExposableEvidence = (row: EvidenceRow): boolean =>
+  !row.support || !UNSUPPORTED_SUPPORTS.includes(row.support);
+
 const mapEvidenceRow = (row: EvidenceRow): Evidence => ({
   id: row.id,
   type: toDomainEvidenceType(row.type),
@@ -104,6 +122,7 @@ const mapEvidenceRow = (row: EvidenceRow): Evidence => ({
   date: formatEvidenceDate(row.date),
   summary: row.summary,
   url: row.url,
+  ...(row.support ? { support: toDomainEvidenceSupport(row.support) } : {}),
 });
 
 const mapClaimRow = (row: ClaimRow): Claim => ({
@@ -112,7 +131,7 @@ const mapClaimRow = (row: ClaimRow): Claim => ({
   title: row.title,
   description: row.description,
   persuadedCount: row._count.feedbacks,
-  evidences: row.evidences.map(mapEvidenceRow),
+  evidences: row.evidences.filter(isExposableEvidence).map(mapEvidenceRow),
 });
 
 /** 찬성 주장을 먼저, 같은 진영 안에서는 `order` 순으로 보여준다. */

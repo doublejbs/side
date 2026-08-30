@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ClaimSide } from '@/domain/ClaimSide';
+import { EvidenceSupport } from '@/domain/EvidenceSupport';
 import { EvidenceType } from '@/domain/EvidenceType';
 import { MediaLeaning } from '@/domain/MediaLeaning';
 import { EXTRACT_SCHEMA_NAME } from '@/pipeline/ExtractSchema';
@@ -13,6 +14,7 @@ import { createFakeTextClient } from '@/pipeline/FakeTextClient';
 import { regenerateIssue } from '@/pipeline/regenerateIssue';
 import { RegenerateNotAllowedError } from '@/pipeline/RegenerateNotAllowedError';
 import { SUMMARIZE_SCHEMA_NAME } from '@/pipeline/SummarizeSchema';
+import { VERIFY_SCHEMA_NAME } from '@/pipeline/VerifySchema';
 
 const SUMMARY_RESPONSE = {
   question: '다시 만든 질문은 무엇일까?',
@@ -66,10 +68,26 @@ const EXTRACT_RESPONSE = {
   opinionGroups: [groupOf(40), groupOf(35), groupOf(25)],
 };
 
+/**
+ * 근거 id 는 주장을 저장한 뒤에야 정해지므로 고정 응답으로는 맞출 수 없다.
+ * 모르는 id 는 `verifyEvidence` 가 버리므로, 여기서는 검증 단계가 실제로 불리는지만 본다.
+ */
+const VERIFY_RESPONSE = {
+  verdicts: [
+    {
+      evidenceId: 'unknown-evidence',
+      support: EvidenceSupport.SUPPORTS,
+      type: EvidenceType.FACT,
+      note: '판정 근거 한 줄이다.',
+    },
+  ],
+};
+
 const createTextClient = () =>
   createFakeTextClient({
     [SUMMARIZE_SCHEMA_NAME]: [SUMMARY_RESPONSE],
     [EXTRACT_SCHEMA_NAME]: [EXTRACT_RESPONSE],
+    [VERIFY_SCHEMA_NAME]: [VERIFY_RESPONSE],
   });
 
 const seed = () => ({
@@ -185,7 +203,7 @@ describe('regenerateIssue', () => {
     expect(db.claims.map((claim) => claim.id)).toEqual(['claim-old']);
   });
 
-  it('요약·추출을 각각 한 번씩만 호출한다', async () => {
+  it('요약·추출·검증을 각각 한 번씩만 호출한다', async () => {
     const { prisma } = createFakePrismaClient(seed());
     const textClient = createTextClient();
 
@@ -194,6 +212,42 @@ describe('regenerateIssue', () => {
     expect(textClient.requests.map((request) => request.schemaName)).toEqual([
       SUMMARIZE_SCHEMA_NAME,
       EXTRACT_SCHEMA_NAME,
+      VERIFY_SCHEMA_NAME,
     ]);
+  });
+
+  it('근거 검증까지 이어서 실행해 검증 시각을 남긴다', async () => {
+    const { db, prisma } = createFakePrismaClient(seed());
+
+    await regenerateIssue({ prisma, textClient: createTextClient(), issueId: 'issue-1' });
+
+    expect(db.issues[0].verifiedAt).toBeInstanceOf(Date);
+  });
+
+  it('분류 결과는 그대로 두고 다시 만들지 않는다', async () => {
+    const base = seed();
+    const classification = {
+      isPolicyDebate: true,
+      debateScore: 80,
+      topic: '노동',
+      reason: '제도 변경에 찬반이 갈린다.',
+      entities: ['국회'],
+      keySentences: ['적용 범위가 쟁점이다.', '부담이 쟁점이다.', '보전이 쟁점이다.'],
+      keyClaims: ['찬성 요지', '반대 요지', '중립 요지'],
+    };
+    const { db, prisma } = createFakePrismaClient({
+      ...base,
+      issues: [{ ...base.issues[0], debateScore: 80, topic: '노동', classification }],
+    });
+    const textClient = createTextClient();
+
+    await regenerateIssue({ prisma, textClient, issueId: 'issue-1' });
+
+    expect(db.issues[0].debateScore).toBe(80);
+    expect(db.issues[0].classification).toEqual(classification);
+    expect(textClient.requests.some((request) => request.schemaName === 'issue_classification')).toBe(
+      false,
+    );
+    expect(textClient.requests[0].userPrompt).toContain('사전 추출 요지');
   });
 });
