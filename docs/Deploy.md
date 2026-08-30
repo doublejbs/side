@@ -258,3 +258,8 @@ npx prisma db execute --stdin < /dev/null
 - 파이프라인이 정상으로 기사를 수집하도록 GitHub Secrets 설정 완료
 - 파이프라인 실행 및 이슈 검수 시작
 - 사용자 피드백 기반 기사·주제 조정
+
+## 배포 상태 (2026-08-30)
+- 프로덕션: https://side-puce.vercel.app (프로젝트 `side`, 팀 `jins-projects-33ecbd26`), `main` 푸시 시 자동 배포. 브랜치 프리뷰: `side-git-<branch>-jins-projects-33ecbd26.vercel.app`
+- **Deployment Protection 해제 필요**: 새 프로젝트는 Vercel Authentication이 기본으로 켜져 모든 경로가 `vercel.com/sso-api`로 302된다. 대시보드 Settings → Deployment Protection → Vercel Authentication을 끄거나, API `PATCH /v9/projects/<id>?teamId=<team>` 본문 `{"ssoProtection": null}`.
+- Node.js 버전은 프로젝트 설정 기준 24.x(Next 16·Prisma 6 정상 빌드).
