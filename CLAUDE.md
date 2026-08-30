@@ -55,3 +55,7 @@ npm run pipeline -- all --dry-run  # 외부 호출 없이 전 단계 실행
 - `npm run dev`는 `certificates/localhost*.pem`(mkcert로 생성, gitignore)을 사용하는 HTTPS 서버다. 인증서가 없으면 `mkcert -key-file certificates/localhost-key.pem -cert-file certificates/localhost.pem localhost 127.0.0.1 ::1`로 만든다.
 - 서버 액션의 `redirect()`가 내부 HTTPS 요청을 하므로 Node가 mkcert 루트 CA를 신뢰해야 한다(`NODE_EXTRA_CA_CERTS`). `dev` 스크립트가 `$MKCERT_CAROOT`(기본 `~/Library/Application Support/mkcert`)의 `rootCA.pem`을 자동 지정한다. 이 설정이 없으면 관리자 로그인이 `failed to get redirect response … unable to verify the first certificate`로 실패한다.
 - HTTP가 필요하면 `npm run dev:http`.
+
+## 배포
+
+Vercel 배포 가이드: [`docs/Deploy.md`](./docs/Deploy.md)
