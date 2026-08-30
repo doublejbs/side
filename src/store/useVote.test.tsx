@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { VoteChoice } from '@/domain/VoteChoice';
 import type { VoteResultResponse } from '@/domain/VoteApiTypes';
-import { setVote } from '@/store/UserRecordStore';
+import { LoginRequiredError } from '@/store/LoginRequiredError';
+import { getVote, setVote, VOTE_STORAGE_KEY } from '@/store/UserRecordStore';
 import { useVote } from '@/store/useVote';
 import { castVoteRequest } from '@/store/VoteApiClient';
 import {
@@ -157,6 +158,63 @@ describe('useVote 서버 모드', () => {
     });
     expect(result.current.vote?.choice).toBe(VoteChoice.DISAGREE);
     expect(result.current.serverResult).toBeNull();
+  });
+
+  it('로그인이 필요해 거절되면 처음 투표는 로컬에도 남지 않는다', async () => {
+    castVoteRequestMock.mockRejectedValue(new LoginRequiredError());
+
+    const { result } = renderHook(() =>
+      useVote('work-week-4-5', { isServerEnabled: true }),
+    );
+
+    act(() => {
+      result.current.castVote(VoteChoice.AGREE);
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoginRequired).toBe(true);
+    });
+    expect(result.current.vote).toBeNull();
+    expect(getVote('work-week-4-5')).toBeNull();
+    expect(window.localStorage.getItem(VOTE_STORAGE_KEY)).not.toContain('work-week-4-5');
+  });
+
+  it('로그인이 필요해 거절되면 이전 선택으로 되돌린다', async () => {
+    setVote('work-week-4-5', VoteChoice.AGREE);
+    castVoteRequestMock.mockRejectedValue(new LoginRequiredError());
+
+    const { result } = renderHook(() =>
+      useVote('work-week-4-5', { isServerEnabled: true }),
+    );
+
+    act(() => {
+      result.current.castVote(VoteChoice.DISAGREE);
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoginRequired).toBe(true);
+    });
+    expect(result.current.vote?.choice).toBe(VoteChoice.AGREE);
+    expect(getVote('work-week-4-5')?.choice).toBe(VoteChoice.AGREE);
+  });
+
+  it('일반 오류(500)에서는 로컬 기록을 되돌리지 않는다', async () => {
+    setVote('work-week-4-5', VoteChoice.AGREE);
+    castVoteRequestMock.mockRejectedValue(new Error('서버 오류'));
+
+    const { result } = renderHook(() =>
+      useVote('work-week-4-5', { isServerEnabled: true }),
+    );
+
+    act(() => {
+      result.current.castVote(VoteChoice.DISAGREE);
+    });
+
+    await waitFor(() => {
+      expect(result.current.error?.message).toBe('서버 오류');
+    });
+    expect(result.current.vote?.choice).toBe(VoteChoice.DISAGREE);
+    expect(getVote('work-week-4-5')?.choice).toBe(VoteChoice.DISAGREE);
   });
 
   it('목 모드에서는 서버 분포를 읽지 않는다', () => {

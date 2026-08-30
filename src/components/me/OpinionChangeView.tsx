@@ -2,7 +2,6 @@ import { CardElement } from '@/components/common/CardElement';
 import { CardView } from '@/components/common/CardView';
 import { ArrowRightIcon } from '@/components/common/icons/ArrowRightIcon';
 import { formatMonthsAgo } from '@/components/me/formatMonthsAgo';
-import type { Issue } from '@/domain/Issue';
 import type { OpinionChange } from '@/domain/UserRecord';
 import { VoteChoice } from '@/domain/VoteChoice';
 import { getVoteChoiceLabel } from '@/domain/voteChoiceLabel';
@@ -11,7 +10,8 @@ import styles from './OpinionChangeView.module.css';
 
 interface Props {
   change: OpinionChange;
-  issue: Issue;
+  /** 이슈 질문. 카드에 쓰는 값만 받아 클라이언트로 이슈 전체를 넘기지 않는다. */
+  question: string;
   persuadedClaimTitle: string;
 }
 
@@ -23,9 +23,9 @@ const CHOICE_CLASS: Record<VoteChoice, string> = {
 
 const PERSUADED_PREFIX = '내가 "설득됐어요"라고 평가한 주장 — ';
 
-export const OpinionChangeView = ({ change, issue, persuadedClaimTitle }: Props) => (
+export const OpinionChangeView = ({ change, question, persuadedClaimTitle }: Props) => (
   <CardView as={CardElement.ARTICLE} className={styles.card}>
-    <h3 className={styles.question}>{issue.question}</h3>
+    <h3 className={styles.question}>{question}</h3>
     <div className={styles.changeRow}>
       <div className={`${styles.state} ${CHOICE_CLASS[change.before.choice]}`}>
         <span className={styles.stateTime}>

@@ -1,5 +1,4 @@
-import { cookies } from 'next/headers';
-
+import { getSessionUser } from '@/lib/supabase/getSessionUser';
 import { getServerVoteContext } from '@/server/isServerVoteEnabled';
 import { readJsonBody, toRouteResponse } from '@/server/routeResponse';
 import { handleClaimFeedback, serverVoteDisabledResponse } from '@/server/voteHandlers';
@@ -17,8 +16,9 @@ export const POST = async (request: Request, { params }: Context): Promise<Respo
   }
 
   const { claimId } = await params;
-  const cookieStore = await cookies();
-  const body = await readJsonBody(request);
+  const [sessionUser, body] = await Promise.all([getSessionUser(), readJsonBody(request)]);
 
-  return toRouteResponse(await handleClaimFeedback({ ...context, cookieStore, claimId, body }));
+  return toRouteResponse(
+    await handleClaimFeedback({ store: context.store, sessionUser, claimId, body }),
+  );
 };

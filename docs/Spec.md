@@ -22,7 +22,8 @@ MVP는 **모바일 퍼스트 웹**(Next.js App Router)이며 백엔드 없이 **
 
 ### 제외
 
-- 댓글, 로그인, 실제 서버 통신, 검색 동작(아이콘만 배치), 실제 그룹 클러스터링 알고리즘(그룹은 목 데이터).
+- 댓글, 검색 동작(아이콘만 배치), 실제 그룹 클러스터링 알고리즘(그룹은 목 데이터).
+- 로그인(Supabase Auth · Google/카카오)과 서버 투표는 이후 단계에서 추가했다. 스펙은 `docs/AuthSpec.md`.
 - 근거 단위 피드백(이 정보가 중요해요 / 사실과 다른 것 같아요) UI — `EvidenceFeedback` enum만 선언하고 화면은 만들지 않는다.
 
 ## 2. 기술 스택
@@ -149,8 +150,13 @@ interface OpinionChange { issueId: string; before: VoteRecord; after: VoteRecord
 
 ## 6. 화면 명세
 
+### 00 로그인 `/login`
+- 로고 `SIDE`, 한 줄 안내, 공급자 버튼 2개(Google · 카카오 — 52px 동일 크기, 브랜드 가이드 색). `?next=`는 내부 절대 경로만 허용하고(`sanitizeNextPath`) 기본값은 `/`. 이미 로그인했으면 `next`로 보낸다.
+- 콜백이 실패해 `?error=1`로 되돌아오면 실패 안내를 보여준다. Supabase 공개 환경 변수가 없으면 버튼 대신 "로그인이 설정되지 않았습니다"만 보여준다.
+- 상세는 `docs/AuthSpec.md` 4.1·4.4.
+
 ### 01 홈 `/`
-- 헤더: 공통 `AppHeaderView`(로고 `SIDE` + 우측 액션 슬롯) — 액션은 비활성 검색 아이콘(`HeaderActionButtonView`).
+- 헤더: 공통 `AppHeaderView`(로고 `SIDE` + 우측 액션 슬롯) — 액션은 비활성 검색 아이콘(`HeaderActionButtonView`), 그 오른쪽에 인증 액션(`AuthActionView` — 비로그인 "로그인" 링크 / 로그인 아바타 → `/me`).
 - Hero: 공통 `PageHeroView` — "오늘의 이슈" / "지금 사람들이 의견을 나누고 있는 질문들".
 - 첫 카드는 대형(24px 질문, 태그 칩, 3분할 분포 바 10px, 퍼센트 3개, 참여자, "3분 만에 이해하기 →"), 나머지 카드는 컴팩트(18px).
 - 카드 전체가 `/issues/[id]` 링크.
@@ -167,6 +173,7 @@ interface OpinionChange { issueId: string; before: VoteRecord; after: VoteRecord
 6. **반대하는 사람들은 이렇게 말해요** — 동일 구조 × 3
 7. **언론은 어떻게 다르게 보도했을까요?** — 언론 관점 데이터가 없으면 섹션을 숨긴다. 있을 때는 서브텍스트 `{coveragePeriodLabel} · {mediaOutletCount}개 매체 · 분석 기사 {합}건`(상단 통계 타일의 "원문 기사"는 요약의 핵심 출처 수로, 서로 다른 값이다) + 진보/중도/보수 카드(기사 수, 주요 프레임, 키워드 칩, 대표 기사) + 브랜드색 "공통적으로 다룬 내용" 카드
 8. **지금 당신의 생각은?** — 같은 크기 버튼 3개(찬성 / 아직 모르겠어요 / 반대). 투표 시 `/issues/[id]/result`로 이동. 이미 투표했다면 선택 표시 + "결과 보기" 링크.
+   - **로그인 게이트(서버 모드 한정)**: 비로그인이면 버튼 3개가 같은 모습의 로그인 링크(`/login?next=/issues/[id]#vote`)가 되고 카드 하단에 "투표하려면 로그인이 필요해요"를 덧붙인다. 목 모드는 게이트 없이 localStorage에 기록한다. 근거: `docs/AuthSpec.md` 4.2.
 
 존재하지 않는 id → `notFound()`.
 
@@ -174,6 +181,7 @@ interface OpinionChange { issueId: string; before: VoteRecord; after: VoteRecord
 - 헤더(`BackHeaderView`의 `title`에 이슈 질문 — 축약 없이 CSS ellipsis), 주장 제목·설명, 찬/반 라벨.
 - 근거 목록: 타입 배지(`FACT`/`RESEARCH`/`EXPERT`/`CLAIM`), 출처, 날짜, 핵심 내용, "원문 보기"(외부 링크, `target=_blank rel=noopener`).
 - 주장 피드백 버튼 3개: 설득됐어요 / 설득되지 않았어요 / 근거가 부족해요 (토글, localStorage 저장, 선택 강조).
+- **로그인 게이트(서버 모드 한정)**: 비로그인이면 버튼 3개가 로그인 링크(`/login?next=/issues/[id]/claims/[claimId]#feedback`)가 되고 "피드백을 남기려면 로그인이 필요해요"를 덧붙인다.
 
 ### 04 투표 결과 `/issues/[issueId]/result`
 - "N명이 의견을 남겼어요", 3개 가로 바(찬성/반대/아직 모르겠어요) + 퍼센트, 내 선택에 "내 선택" 배지.
@@ -181,17 +189,20 @@ interface OpinionChange { issueId: string; before: VoteRecord; after: VoteRecord
 - CTA 카드(브랜드색): "나와 다른 사람들은 왜 그렇게 생각할까요?" → 상세 페이지 반대 섹션 앵커(내가 찬성이면 `#disagree`, 반대면 `#agree`, 모름이면 `#agree`).
 - **비슷한 생각을 가진 사람들**: 그룹 카드 3개, 첫 그룹에 "나와 가장 가까움" 배지. 그룹 카드 클릭 → 확장(동의하는 주장 / 반대하는 주장 / 가장 의견이 갈리는 주장 목록).
 - 미투표 상태로 접근하면 상세 페이지의 투표 섹션으로 안내하는 카드 표시(`/issues/[id]#vote`).
+- **비로그인(서버 모드)**: "내 선택" 배지 없이 분포만 보여주고 "로그인하고 투표하기" 링크(`/login?next=/issues/[id]#vote`)를 덧붙인다.
 
 ### 05 발견 `/discover`
 - "당신과 가장 다른 의견" 카드: 내 선택 vs 전체 분포가 가장 다른 이슈(투표 기록 기준; 없으면 안내 문구).
 - "의외로 의견이 갈리는 이슈": 찬반 차이가 가장 작은 이슈.
 - "내 생각과 비슷한 그룹": 첫 이슈 그룹 A 재사용 + "참여한 N개 이슈 기반". 투표 기록이 없으면 그룹 카드 대신 안내 문구와 "이슈 보러 가기" 링크만 보여준다.
 - 페이지는 서버 컴포넌트다. localStorage 투표에 의존하는 부분(`MostDifferentIssueContainer`, `SimilarGroupContainer`)만 클라이언트이며, `pickMostDifferentIssue`에는 경량 `IssueSummary[]` 후보만 넘긴다.
+- 로그인이 켜져 있고 세션이 없으면 두 섹션은 카드 대신 안내 문구 + 로그인 링크(`/login?next=/discover`)를 보여준다.
 
 ### 06 나 `/me`
 - "나의 정치 관점": 축 5개(경제/복지/노동/환경/외교) 슬라이더 시각화(읽기 전용), 좌우 라벨, 안내문 "성향 라벨이 아니라 기록입니다".
 - "내 생각이 바뀐 이슈": before → after 카드 + "무엇이 생각을 바꿨나요?".
 - "나의 참여" 타일 3개(투표한 이슈 = localStorage 투표 수, 읽은 근거, 바뀐 생각). 페이지는 서버 컴포넌트이고 투표 수만 `ParticipationTilesContainer`(클라이언트)가 채운다.
+- 로그인 시 최상단에 계정 카드(`AccountCardView` — 아바타·이름·이메일·로그아웃). 로그인이 켜져 있고 세션이 없으면 본문 대신 `LoginRequiredView`(안내 카드 + 로그인 버튼)만 렌더한다.
 
 ## 7. 컴포넌트 구조
 
@@ -202,12 +213,16 @@ src/
     page.tsx                   # 홈 (server)
     discover/page.tsx          # 발견 (server)
     me/page.tsx                # 나 (server)
+    login/page.tsx             # 로그인 (server)
     issues/[issueId]/page.tsx
     issues/[issueId]/result/page.tsx
     issues/[issueId]/claims/[claimId]/page.tsx
     api/                       # 앱이 쓰는 REST 라우트 (이슈 목록·상세, 투표, 근거 피드백)
     admin/(review)/            # 관리자 검수 화면 라우트 그룹 (로그인 화면만 그룹 밖)
   components/
+    auth/    LoginPageView, OAuthLoginContainer(client), OAuthButtonView, GoogleMarkIcon,
+             KakaoMarkIcon, AuthActionView, AccountCardView, LoginRequiredView, LoginErrorView,
+             getUserInitial
     common/  AppShellView, AppHeaderView, PageHeroView, HeaderActionButtonView, TabBarView,
              ChipView(+ChipTone, claimSideChipTone, voteChoiceChipTone),
              CardView(+CardElement, CardTone), BackHeaderView, ArrowLinkView,
@@ -217,22 +232,25 @@ src/
     issue/   IssueHeroView, SummaryView, KeyPointsView, ClaimCardView, ClaimSectionView,
              MediaPerspectiveView, VotePanelView, VotePanelContainer(client)
     result/  VoteResultContainer(client), VoteResultView, DifferentOpinionCtaView, NotVotedView,
-             OpinionGroupListView(client), OpinionGroupItemView, useOpinionGroupState
+             LoginToVoteView, OpinionGroupListView(client), OpinionGroupItemView,
+             useOpinionGroupState
     claim/   EvidenceListView, EvidenceTypeBadgeView, ClaimHeaderView,
              ClaimFeedbackView, ClaimFeedbackOptionView, ClaimFeedbackContainer(client)
     discover/ MostDifferentIssueContainer(client), MostDifferentIssueView, MostDividedIssueView,
              IssueQuestionLinkView, SimilarGroupContainer(client), SimilarGroupView,
              pickDiscoverIssues
-    me/      PerspectiveAxesView, OpinionChangeView, ParticipationTilesView,
+    me/      MeHeaderView, PerspectiveAxesView, OpinionChangeView, ParticipationTilesView,
              ParticipationTilesContainer(client), formatMonthsAgo
   domain/   enum 파일들, Issue.ts, IssueSummary.ts, IssueResultSummary.ts,
             OpinionGroupSummary.ts, UserRecord.ts, computeDistribution.ts,
             voteChoiceLabel.ts, claimSidePresenter.ts
   data/     issues/*.ts, IssueRepository.ts, perspectiveData.ts
-  store/    UserRecordStore.ts, useVote.ts, useUserVotes.ts, useClaimFeedback.ts
+  store/    UserRecordStore.ts, useVote.ts, useUserVotes.ts, useClaimFeedback.ts,
+            VoteApiClient.ts, LoginRequiredError.ts
   server/   서버 전용 모듈 — 관리자 세션·서버 액션 유스케이스, 투표 저장소, 쿠키 서명
   pipeline/ 뉴스 수집부터 논점 추출까지의 파이프라인 단계와 외부 클라이언트 경계
   testing/  테스트에서만 쓰는 가짜 구현 (FakePrismaClient 등)
+  lib/      supabase/*(세션 클라이언트·getSessionUser), auth/*(buildLoginHref, isAuthEnabled)
   proxy.ts  Next 16의 middleware 대체 파일 — /admin/** 세션 쿠키 검사
 ```
 

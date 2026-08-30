@@ -68,3 +68,14 @@
   align-self: center;
   margin-top: 4px;
 }
+
+/* 전역 `a:hover` 의 브랜드색을 덮어, 로그인 게이트 링크도 버튼과 같은 모습을 유지한다. */
+a.choiceButton:hover {
+  color: var(--color-ink);
+}
+
+.loginNotice {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-muted);
+}

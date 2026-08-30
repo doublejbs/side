@@ -8,6 +8,7 @@ import { ArrowLinkView } from '@/components/common/ArrowLinkView';
 import { BackHeaderView } from '@/components/common/BackHeaderView';
 import { getIssueRepository } from '@/data/getIssueRepository';
 import { getClaimSideAnchor } from '@/domain/claimSidePresenter';
+import { buildLoginHref } from '@/lib/auth/buildLoginHref';
 import { decodeSlugParam } from '@/server/decodeRouteParam';
 import { isServerVoteEnabled } from '@/server/isServerVoteEnabled';
 
@@ -63,7 +64,11 @@ const ClaimEvidencePage = async ({ params }: Props) => {
 
         <EvidenceListView evidences={claim.evidences} />
 
-        <ClaimFeedbackContainer claimId={claim.id} isServerEnabled={isServerVoteEnabled()} />
+        <ClaimFeedbackContainer
+          claimId={claim.id}
+          isServerEnabled={isServerVoteEnabled()}
+          loginHref={buildLoginHref(`/issues/${issue.slug}/claims/${claim.id}#feedback`)}
+        />
 
         <ArrowLinkView
           className={styles.backLink}

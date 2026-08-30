@@ -2,6 +2,7 @@
 
 import { SaveErrorView } from '@/components/common/SaveErrorView';
 import { DifferentOpinionCtaView } from '@/components/result/DifferentOpinionCtaView';
+import { LoginToVoteView } from '@/components/result/LoginToVoteView';
 import { NotVotedView } from '@/components/result/NotVotedView';
 import { OpinionGroupListView } from '@/components/result/OpinionGroupListView';
 import { VoteResultView } from '@/components/result/VoteResultView';
@@ -12,6 +13,7 @@ import type { IssueResultSummary } from '@/domain/IssueResultSummary';
 import { VoteChoice } from '@/domain/VoteChoice';
 import type { VoteResultResponse } from '@/domain/VoteApiTypes';
 import { useServerVoteSync } from '@/store/useServerVoteSync';
+import { useSessionUser } from '@/store/useSessionUser';
 import { useVote } from '@/store/useVote';
 
 import styles from './VoteResultContainer.module.css';
@@ -20,6 +22,8 @@ interface Props {
   issue: IssueResultSummary;
   /** 서버 저장(DB)이 켜져 있는지. 페이지가 알려준다. */
   isServerEnabled?: boolean;
+  /** 비로그인일 때 이동할 로그인 경로(`?next=` 포함). 서버가 slug 로 계산해 넘긴다. */
+  loginHref?: string;
 }
 
 interface ResolvedResult {
@@ -51,10 +55,39 @@ const resolveResult = (
   return { distribution: issue.distribution, participantCount: issue.participantCount };
 };
 
-export const VoteResultContainer = ({ issue, isServerEnabled = false }: Props) => {
-  const { vote, isLoaded, serverResult, error } = useVote(issue.slug, { isServerEnabled });
+export const VoteResultContainer = ({
+  issue,
+  isServerEnabled = false,
+  loginHref = '/login',
+}: Props) => {
+  const { user, isLoaded: isSessionLoaded } = useSessionUser();
+  const { vote, isLoaded, serverResult, error, isLoginRequired } = useVote(issue.slug, {
+    isServerEnabled,
+  });
 
   useServerVoteSync(issue.slug, isServerEnabled);
+
+  /** 목 모드는 로그인 없이도 내 선택을 보여준다(개발 편의). */
+  const canVote = !isServerEnabled || (user !== null && !isLoginRequired);
+
+  // 세션은 클라이언트에서 읽으므로(공개 화면 정적 렌더 유지) 판정 전에는 결론을 내지 않는다.
+  if (isServerEnabled && !isSessionLoaded) {
+    return <div className={styles.placeholder} aria-busy="true" />;
+  }
+
+  /** 비로그인이어도 분포는 볼 수 있다. "내 선택" 없이 분포와 로그인 링크만 보여준다. */
+  if (!canVote) {
+    return (
+      <div className={styles.container}>
+        <VoteResultView
+          participantCount={serverResult?.participantCount ?? issue.participantCount}
+          distribution={serverResult?.distribution ?? issue.distribution}
+          myChoice={null}
+        />
+        <LoginToVoteView loginHref={loginHref} />
+      </div>
+    );
+  }
 
   if (!isLoaded) {
     return <div className={styles.placeholder} aria-busy="true" />;

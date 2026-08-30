@@ -1,0 +1,38 @@
+.card {
+  gap: 10px;
+  padding: 22px 20px;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.3px;
+}
+
+.description {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-muted);
+}
+
+.action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  min-width: 96px;
+  height: 44px;
+  padding: 0 16px;
+  margin-top: 4px;
+  border-radius: var(--radius-control);
+  background: var(--color-brand);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-surface);
+}
+
+.action:hover {
+  background: var(--color-brand-strong);
+  color: var(--color-surface);
+}

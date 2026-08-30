@@ -5,11 +5,13 @@ import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 import { VoteChoice } from '@/domain/VoteChoice';
 import type { VoteRecord } from '@/domain/UserRecord';
 import type { VoteResultResponse } from '@/domain/VoteApiTypes';
+import { isLoginRequiredError } from '@/store/LoginRequiredError';
 import { toStoreError } from '@/store/toStoreError';
 import {
   getServerUserRecordVersion,
   getUserRecordVersion,
   getVote,
+  restoreVote,
   setVote,
   subscribeUserRecord,
 } from '@/store/UserRecordStore';
@@ -36,6 +38,8 @@ interface UseVoteResult {
   serverResult: VoteResultResponse | null;
   /** 서버 저장·조회에 실패했을 때의 오류. 내 선택은 로컬에 남는다. */
   error: Error | null;
+  /** 오류가 "로그인이 필요해요"(401)인지. 화면은 저장 실패 대신 로그인 안내를 보여준다. */
+  isLoginRequired: boolean;
   castVote: (choice: VoteChoice) => VoteRecord;
 }
 
@@ -71,6 +75,7 @@ export const useVote = (
   /** 내 선택은 먼저 로컬에 기록해 화면을 즉시 갱신하고, 서버 응답은 도착하는 대로 분포를 덮어쓴다. */
   const castVote = useCallback(
     (choice: VoteChoice): VoteRecord => {
+      const previous = getVote(issueId);
       const record = setVote(issueId, choice);
 
       if (isServerEnabled) {
@@ -79,7 +84,14 @@ export const useVote = (
         setCastError(null);
         castVoteRequest(issueId, choice)
           .then((result) => publishVoteResult(issueId, result, seq))
-          .catch((reason: unknown) => setCastError(toStoreError(reason, CAST_VOTE_ERROR_MESSAGE)));
+          .catch((reason: unknown) => {
+            // 로그인이 필요해 거절된 표는 로컬에도 남기지 않는다.
+            if (isLoginRequiredError(reason)) {
+              restoreVote(issueId, previous);
+            }
+
+            setCastError(toStoreError(reason, CAST_VOTE_ERROR_MESSAGE));
+          });
       }
 
       return record;
@@ -87,5 +99,14 @@ export const useVote = (
     [isServerEnabled, issueId],
   );
 
-  return { vote, isLoaded, serverResult, error: castError ?? serverError, castVote };
+  const error = castError ?? serverError;
+
+  return {
+    vote,
+    isLoaded,
+    serverResult,
+    error,
+    isLoginRequired: isLoginRequiredError(error),
+    castVote,
+  };
 };

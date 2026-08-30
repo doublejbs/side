@@ -1,5 +1,4 @@
-import { cookies } from 'next/headers';
-
+import { getSessionUser } from '@/lib/supabase/getSessionUser';
 import { decodeSlugParam } from '@/server/decodeRouteParam';
 import { getServerVoteContext } from '@/server/isServerVoteEnabled';
 import { readJsonBody, toRouteResponse } from '@/server/routeResponse';
@@ -9,7 +8,7 @@ interface Context {
   params: Promise<{ slug: string }>;
 }
 
-/** `POST /api/issues/[slug]/votes` — 익명 쿠키 기준 1인 1표 upsert. */
+/** `POST /api/issues/[slug]/votes` — 로그인 사용자 기준 1인 1표 upsert. */
 export const POST = async (request: Request, { params }: Context): Promise<Response> => {
   const context = getServerVoteContext();
 
@@ -18,10 +17,14 @@ export const POST = async (request: Request, { params }: Context): Promise<Respo
   }
 
   const { slug } = await params;
-  const cookieStore = await cookies();
-  const body = await readJsonBody(request);
+  const [sessionUser, body] = await Promise.all([getSessionUser(), readJsonBody(request)]);
 
   return toRouteResponse(
-    await handleCastVote({ ...context, cookieStore, slug: decodeSlugParam(slug), body }),
+    await handleCastVote({
+      store: context.store,
+      sessionUser,
+      slug: decodeSlugParam(slug),
+      body,
+    }),
   );
 };

@@ -175,27 +175,40 @@ model Evidence {
 }
 
 model Vote {
-  id        String     @id @default(cuid())
-  issueId   String
-  issue     Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  anonId    String
+  id      String @id @default(cuid())
+  issueId String
+  issue   Issue  @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  /// 로그인 이전(legacy) 익명 식별자. 계정으로 이전하면 null 이 된다.
+  anonId  String?
+  /// Supabase auth.users.id. 새 투표는 항상 이 값으로만 저장한다.
+  userId  String?
+
   choice    VoteChoice
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
-  /// 1인 1표, 변경 가능
+  /// 1인 1표, 변경 가능 (legacy 익명 표)
   @@unique([issueId, anonId])
+  /// 1인 1표, 변경 가능 (계정 표)
+  @@unique([issueId, userId])
+  @@index([userId])
 }
 
 model ClaimFeedbackRecord {
-  id        String        @id @default(cuid())
-  claimId   String
-  claim     Claim         @relation(fields: [claimId], references: [id], onDelete: Cascade)
-  anonId    String
+  id      String @id @default(cuid())
+  claimId String
+  claim   Claim  @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  /// 로그인 이전(legacy) 익명 식별자. 계정으로 이전하면 null 이 된다.
+  anonId  String?
+  /// Supabase auth.users.id. 새 피드백은 항상 이 값으로만 저장한다.
+  userId  String?
+
   feedback  ClaimFeedback
   createdAt DateTime      @default(now())
 
   @@unique([claimId, anonId])
+  @@unique([claimId, userId])
+  @@index([userId])
 }
 
 /// 실행 이력·관측
