@@ -236,7 +236,73 @@ CLI: `npm run pipeline -- [collect|cluster|classify|summarize|extract|verify|lin
 - 경고는 기존 `reviewNote` 아래에 덧붙이고(`appendWarnings`), 경고가 있어도 `status=REVIEW`로 넘겨 관리자가 검수 화면에서 보게 한다.
 
 ### 4.6 스케줄
-- MVP는 수동 CLI. `vercel.json`/cron은 범위 밖(문서에만 남김).
+
+**GitHub Actions로 자동 실행**, `.github/workflows/pipeline.yml` 참고.
+
+#### 실행 주기 및 위치
+
+- 자동 실행: 매일 KST 09:00, 18:00 (`0 0 * * *`, `0 9 * * *` UTC 크론)
+- 수동 실행: `gh workflow run pipeline.yml -f step=all` (선택적 `-f dry_run=true`)
+- 실행 환경: ubuntu-latest, Node 22, 30분 타임아웃, 동시 실행 방지 (`concurrency: news-pipeline`)
+
+#### 시크릿 설정 (필수)
+
+다음 값을 GitHub 리포지토리 설정에서 시크릿으로 등록한다 (`gh secret set <name>`).
+
+```bash
+# 데이터베이스
+gh secret set DATABASE_URL --body "postgresql://..."
+
+# NCP API 게이트웨이 (뉴스 수집)
+gh secret set NCP_APIGW_API_KEY_ID --body "..."
+gh secret set NCP_APIGW_API_KEY --body "..."
+
+# OpenAI API
+gh secret set OPENAI_API_KEY --body "sk-..."
+```
+
+#### 변수 설정 (선택, 기본값 사용 가능)
+
+Repository `Settings` → `Secrets and variables` → `Variables`에서 설정하거나 생략하면 코드 기본값을 사용한다.
+
+| 변수 | 기본값 | 용도 |
+|---|---|---|
+| `OPENAI_TEXT_MODEL` | `gpt-5.4-mini` | summarize · extract · verify |
+| `OPENAI_NANO_MODEL` | `gpt-5.4-nano` | classify |
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | cluster |
+| `PIPELINE_DEBATE_THRESHOLD` | `60` | classify 통과 점수(0~100) |
+| `PIPELINE_EXPOSE_LIMIT` | `10` | 실행당 summarize/extract 대상 상한 |
+
+#### 호스팅 데이터베이스 준비 (Supabase 예시)
+
+1. **Supabase 프로젝트 생성**
+   - https://supabase.com → 새 프로젝트 생성 (지역: 서울, `ap-southeast-1`)
+   - 프로젝트 대기
+
+2. **Connection String 확인**
+   - 프로젝트 `Settings` → `Database` → `Connection pooler` (또는 direct)
+   - Pooler 권장 이유: Prisma와의 연결 풀링 효율성
+   - URL 예: `postgresql://postgres.[프로젝트]:[암호]@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1`
+   - 추천 쿼리 파라미터: `?pgbouncer=true&connection_limit=1` (Prisma 공식 문서 기준, PgBouncer 연결 제한)
+
+3. **DATABASE_URL 시크릿 등록**
+   ```bash
+   gh secret set DATABASE_URL --body "postgresql://..."
+   ```
+
+4. **최초 마이그레이션 및 시드 (로컬에서 해당 URL로 실행)**
+   ```bash
+   export DATABASE_URL="postgresql://..."
+   npx prisma migrate deploy
+   npm run db:seed
+   ```
+   
+   이 작업은 **로컬에서만** 실행한다. GitHub Actions는 마이그레이션만 자동으로 실행하며 시드는 관리자가 필요할 때 수동으로 한다(기존 데이터 덮어쓰기 방지).
+
+5. **시크릿 확인**
+   ```bash
+   gh secret list
+   ```
 
 ## 5. 관리자 검수 `/admin`
 
