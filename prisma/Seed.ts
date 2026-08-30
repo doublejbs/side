@@ -8,6 +8,9 @@ import { ClaimSide as DomainClaimSide } from '../src/domain/ClaimSide';
 import { PUBLISHER_DIRECTORY } from '../src/pipeline/publisherDirectory';
 import type { Issue, VoteDistribution } from '../src/domain/Issue';
 
+/** 시드 이슈 간 publishedAt 간격(1분) — 목 데이터 순서를 홈 정렬에 반영 */
+const SEED_PUBLISH_GAP_MS = 60_000;
+
 /** 관리자가 나중에 편집하는 기본 수집 키워드. */
 const SEARCH_KEYWORDS = ['주 4.5일제', '원전 확대', '정년 연장', 'AI 규제', '부동산 보유세'];
 
@@ -124,7 +127,10 @@ const seedIssue = async (
   prisma: PrismaClient,
   issue: Issue,
   withDemoVotes: boolean,
+  order: number,
 ): Promise<void> => {
+  // 홈은 publishedAt 내림차순이므로 목 데이터 순서(첫 이슈가 가장 최신)를 시간차로 보장한다.
+  const publishedAt = new Date(Date.now() - order * SEED_PUBLISH_GAP_MS);
   const data = {
     status: IssueStatus.PUBLISHED,
     question: issue.question,
@@ -135,7 +141,7 @@ const seedIssue = async (
     mediaPerspectives: toJsonValue(issue.mediaPerspectives),
     opinionGroups: toJsonValue(issue.opinionGroups),
     centroid: [],
-    publishedAt: new Date(),
+    publishedAt,
   };
 
   const row = await prisma.issue.upsert({
@@ -215,8 +221,8 @@ const run = async (): Promise<void> => {
     await seedSearchQueries(prisma);
     await seedPublishers(prisma);
 
-    for (const issue of MOCK_ISSUES) {
-      await seedIssue(prisma, issue, withDemoVotes);
+    for (const [order, issue] of MOCK_ISSUES.entries()) {
+      await seedIssue(prisma, issue, withDemoVotes, order);
     }
 
     console.log(
