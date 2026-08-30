@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { VoteResultContainer } from '@/components/result/VoteResultContainer';
 import { MOCK_ISSUES } from '@/data/MockIssueRepository';
+import type { SessionUser } from '@/domain/SessionUser';
 import { toIssueResultSummary } from '@/domain/IssueResultSummary';
 import { VoteChoice } from '@/domain/VoteChoice';
 import type { VoteResultResponse } from '@/domain/VoteApiTypes';
+import { useSessionUser } from '@/store/useSessionUser';
 import { setVote } from '@/store/UserRecordStore';
 import { fetchMyVote } from '@/store/VoteApiClient';
 import { nextVoteRequestSeq, publishVoteResult, resetVoteResults } from '@/store/VoteResultCache';
@@ -15,8 +17,23 @@ vi.mock('@/store/VoteApiClient', () => ({
   fetchMyVote: vi.fn(),
   sendClaimFeedback: vi.fn(),
 }));
+vi.mock('@/store/useSessionUser', () => ({ useSessionUser: vi.fn() }));
 
 const fetchMyVoteMock = vi.mocked(fetchMyVote);
+
+const useSessionUserMock = vi.mocked(useSessionUser);
+
+const SESSION_USER: SessionUser = {
+  id: 'user-1',
+  email: 'someone@example.com',
+  name: '홍길동',
+  avatarUrl: null,
+};
+
+/** 세션을 로그인 상태로 확정한다. 세션은 이제 컨테이너가 클라이언트에서 읽는다. */
+const signIn = (): void => {
+  useSessionUserMock.mockReturnValue({ user: SESSION_USER, isLoaded: true });
+};
 
 const issue = toIssueResultSummary(MOCK_ISSUES[0]);
 
@@ -24,6 +41,7 @@ describe('VoteResultContainer', () => {
   beforeEach(() => {
     window.localStorage.clear();
     resetVoteResults();
+    useSessionUserMock.mockReset().mockReturnValue({ user: null, isLoaded: true });
   });
 
   it('투표 기록이 없으면 투표 안내 카드를 보여준다', () => {
@@ -77,6 +95,8 @@ describe('VoteResultContainer 서버 모드', () => {
   beforeEach(() => {
     window.localStorage.clear();
     resetVoteResults();
+    useSessionUserMock.mockReset();
+    signIn();
     fetchMyVoteMock.mockReset();
   });
 
@@ -171,5 +191,64 @@ describe('VoteResultContainer 서버 모드', () => {
     render(<VoteResultContainer issue={issue} isServerEnabled />);
 
     expect(screen.getByText('아직 이 이슈에 의견을 남기지 않았어요')).toBeInTheDocument();
+  });
+});
+
+describe('VoteResultContainer 비로그인', () => {
+  const LOGIN_HREF = `/login?next=${encodeURIComponent(`/issues/${issue.slug}#vote`)}`;
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    resetVoteResults();
+    useSessionUserMock.mockReset().mockReturnValue({ user: null, isLoaded: true });
+    fetchMyVoteMock.mockReset();
+    fetchMyVoteMock.mockResolvedValue({
+      slug: issue.slug,
+      distribution: issue.distribution,
+      participantCount: issue.participantCount,
+      myChoice: null,
+    });
+  });
+
+  it('내 선택 배지 없이 분포와 로그인 링크를 보여준다', () => {
+    render(<VoteResultContainer issue={issue} isServerEnabled loginHref={LOGIN_HREF} />);
+
+    expect(
+      screen.getByText(`${issue.participantCount.toLocaleString('ko-KR')}명이`),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('내 선택')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /로그인하고 투표하기/ })).toHaveAttribute(
+      'href',
+      LOGIN_HREF,
+    );
+  });
+
+  it('로컬에 남은 투표 기록이 있어도 내 선택을 보여주지 않는다', () => {
+    setVote(issue.slug, VoteChoice.AGREE);
+
+    render(<VoteResultContainer issue={issue} isServerEnabled loginHref={LOGIN_HREF} />);
+
+    expect(screen.queryByText('내 선택')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /로그인하고 투표하기/ })).toBeInTheDocument();
+  });
+
+  it('세션을 읽기 전에는 결과 대신 자리만 보여준다', () => {
+    setVote(issue.slug, VoteChoice.AGREE);
+    useSessionUserMock.mockReturnValue({ user: null, isLoaded: false });
+
+    const { container } = render(
+      <VoteResultContainer issue={issue} isServerEnabled loginHref={LOGIN_HREF} />,
+    );
+
+    expect(container.querySelector('[aria-busy="true"]')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /로그인하고 투표하기/ })).not.toBeInTheDocument();
+  });
+
+  it('목 모드에서는 세션이 없어도 내 선택을 보여준다', () => {
+    setVote(issue.slug, VoteChoice.AGREE);
+
+    render(<VoteResultContainer issue={issue} loginHref={LOGIN_HREF} />);
+
+    expect(screen.getByText('내 선택')).toBeInTheDocument();
   });
 });

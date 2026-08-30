@@ -12,6 +12,10 @@ interface Props {
   isLoaded: boolean;
   /** 서버 저장에 실패했는지. 실패해도 내 선택은 로컬에 남는다. */
   hasSaveError?: boolean;
+  /** 로그인 상태. false 면 선택지가 피드백 대신 로그인으로 이동한다. */
+  isAuthenticated: boolean;
+  /** 비로그인일 때 선택지가 이동할 로그인 경로. */
+  loginHref: string;
 }
 
 interface FeedbackOption {
@@ -30,8 +34,10 @@ export const ClaimFeedbackView = ({
   onToggle,
   isLoaded,
   hasSaveError = false,
+  isAuthenticated,
+  loginHref,
 }: Props) => (
-  <CardView as={CardElement.SECTION} className={styles.card}>
+  <CardView as={CardElement.SECTION} id="feedback" className={styles.card}>
     <h2 className={styles.title}>이 주장, 어땠나요?</h2>
     <p className={styles.description}>피드백은 콘텐츠 품질을 높이는 데 쓰여요.</p>
 
@@ -44,9 +50,15 @@ export const ClaimFeedbackView = ({
           isSelected={selected === option.feedback}
           isLoaded={isLoaded}
           onToggle={onToggle}
+          isAuthenticated={isAuthenticated}
+          loginHref={loginHref}
         />
       ))}
     </div>
+
+    {isAuthenticated ? null : (
+      <p className={styles.loginNotice}>피드백을 남기려면 로그인이 필요해요</p>
+    )}
 
     {hasSaveError ? <SaveErrorView /> : null}
   </CardView>

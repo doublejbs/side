@@ -5,6 +5,7 @@ import { BackHeaderView } from '@/components/common/BackHeaderView';
 import { VoteResultContainer } from '@/components/result/VoteResultContainer';
 import { getIssueRepository } from '@/data/getIssueRepository';
 import { toIssueResultSummary } from '@/domain/IssueResultSummary';
+import { buildLoginHref } from '@/lib/auth/buildLoginHref';
 import { decodeSlugParam } from '@/server/decodeRouteParam';
 import { isServerVoteEnabled } from '@/server/isServerVoteEnabled';
 
@@ -54,7 +55,11 @@ const IssueResultPage = async ({ params }: Props) => {
       <div className={styles.content}>
         {/* 투표 여부와 무관한 이슈 질문은 서버에서 렌더해 결과 화면의 골격을 먼저 보여준다. */}
         <h1 className={styles.question}>{issue.question}</h1>
-        <VoteResultContainer issue={toIssueResultSummary(issue)} isServerEnabled={isServerVoteEnabled()} />
+        <VoteResultContainer
+          issue={toIssueResultSummary(issue)}
+          isServerEnabled={isServerVoteEnabled()}
+          loginHref={buildLoginHref(`/issues/${issue.slug}#vote`)}
+        />
       </div>
     </main>
   );

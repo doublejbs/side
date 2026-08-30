@@ -1,0 +1,17 @@
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 0 20px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 세션을 받아오기 전 자리. 본문이 들어오며 화면이 튀지 않을 만큼만 잡는다. */
+.placeholder {
+  min-height: 320px;
+}

@@ -6,10 +6,18 @@ import type {
   ClaimFeedbackResponse,
   VoteResultResponse,
 } from '@/domain/VoteApiTypes';
+import { LoginRequiredError } from '@/store/LoginRequiredError';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
+/** 로그인이 필요한 요청을 비로그인으로 보냈을 때 서버가 주는 상태 코드. */
+const UNAUTHORIZED_STATUS = 401;
+
 const readJson = async <T>(response: Response): Promise<T> => {
+  if (response.status === UNAUTHORIZED_STATUS) {
+    throw new LoginRequiredError();
+  }
+
   if (!response.ok) {
     throw new Error(`투표 API 요청이 실패했어요 (${response.status})`);
   }

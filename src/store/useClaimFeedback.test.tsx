@@ -2,6 +2,12 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ClaimFeedback } from '@/domain/ClaimFeedback';
+import { LoginRequiredError } from '@/store/LoginRequiredError';
+import {
+  CLAIM_FEEDBACK_STORAGE_KEY,
+  getClaimFeedback,
+  setClaimFeedback,
+} from '@/store/UserRecordStore';
 import { useClaimFeedback } from '@/store/useClaimFeedback';
 import { sendClaimFeedback } from '@/store/VoteApiClient';
 
@@ -133,5 +139,64 @@ describe('useClaimFeedback 서버 모드', () => {
       expect(result.current.error?.message).toBe('네트워크 오류');
     });
     expect(result.current.feedback?.feedback).toBe(ClaimFeedback.PERSUADED);
+  });
+
+  it('로그인이 필요해 거절되면 처음 피드백은 로컬에도 남지 않는다', async () => {
+    sendClaimFeedbackMock.mockRejectedValue(new LoginRequiredError());
+
+    const { result } = renderHook(() =>
+      useClaimFeedback('work-week-agree-1', { isServerEnabled: true }),
+    );
+
+    act(() => {
+      result.current.toggleFeedback(ClaimFeedback.PERSUADED);
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoginRequired).toBe(true);
+    });
+    expect(result.current.feedback).toBeNull();
+    expect(getClaimFeedback('work-week-agree-1')).toBeNull();
+    expect(window.localStorage.getItem(CLAIM_FEEDBACK_STORAGE_KEY)).not.toContain(
+      'work-week-agree-1',
+    );
+  });
+
+  it('로그인이 필요해 거절되면 이전 피드백으로 되돌린다', async () => {
+    setClaimFeedback('work-week-agree-1', ClaimFeedback.PERSUADED);
+    sendClaimFeedbackMock.mockRejectedValue(new LoginRequiredError());
+
+    const { result } = renderHook(() =>
+      useClaimFeedback('work-week-agree-1', { isServerEnabled: true }),
+    );
+
+    act(() => {
+      result.current.toggleFeedback(ClaimFeedback.LACKS_EVIDENCE);
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoginRequired).toBe(true);
+    });
+    expect(result.current.feedback?.feedback).toBe(ClaimFeedback.PERSUADED);
+    expect(getClaimFeedback('work-week-agree-1')?.feedback).toBe(ClaimFeedback.PERSUADED);
+  });
+
+  it('일반 오류(500)에서는 로컬 기록을 되돌리지 않는다', async () => {
+    setClaimFeedback('work-week-agree-1', ClaimFeedback.PERSUADED);
+    sendClaimFeedbackMock.mockRejectedValue(new Error('서버 오류'));
+
+    const { result } = renderHook(() =>
+      useClaimFeedback('work-week-agree-1', { isServerEnabled: true }),
+    );
+
+    act(() => {
+      result.current.toggleFeedback(ClaimFeedback.LACKS_EVIDENCE);
+    });
+
+    await waitFor(() => {
+      expect(result.current.error?.message).toBe('서버 오류');
+    });
+    expect(result.current.feedback?.feedback).toBe(ClaimFeedback.LACKS_EVIDENCE);
+    expect(getClaimFeedback('work-week-agree-1')?.feedback).toBe(ClaimFeedback.LACKS_EVIDENCE);
   });
 });

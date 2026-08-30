@@ -12,6 +12,7 @@ import { VotePanelContainer } from '@/components/issue/VotePanelContainer';
 import { getIssueRepository } from '@/data/getIssueRepository';
 import { ClaimSide } from '@/domain/ClaimSide';
 import type { Claim } from '@/domain/Issue';
+import { buildLoginHref } from '@/lib/auth/buildLoginHref';
 import { decodeSlugParam } from '@/server/decodeRouteParam';
 import { isServerVoteEnabled } from '@/server/isServerVoteEnabled';
 
@@ -91,7 +92,11 @@ const IssueDetailPage = async ({ params }: Props) => {
           mediaOutletCount={issue.mediaOutletCount}
           coveragePeriodLabel={issue.coveragePeriodLabel}
         />
-        <VotePanelContainer issueId={issue.slug} isServerEnabled={isServerVoteEnabled()} />
+        <VotePanelContainer
+          issueId={issue.slug}
+          isServerEnabled={isServerVoteEnabled()}
+          loginHref={buildLoginHref(`/issues/${issue.slug}#vote`)}
+        />
       </div>
     </main>
   );

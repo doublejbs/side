@@ -8,6 +8,10 @@ import { VoteChoice } from '@/domain/VoteChoice';
 
 const ISSUE_ID = 'work-week-4-5';
 
+const LOGIN_HREF = `/login?next=${encodeURIComponent(`/issues/${ISSUE_ID}#vote`)}`;
+
+const LOGIN_NOTICE = '투표하려면 로그인이 필요해요';
+
 const renderPanel = (overrides: Partial<ComponentProps<typeof VotePanelView>> = {}) => {
   const onVote = vi.fn();
 
@@ -17,6 +21,8 @@ const renderPanel = (overrides: Partial<ComponentProps<typeof VotePanelView>> = 
       selectedChoice={null}
       onVote={onVote}
       isLoaded
+      isAuthenticated
+      loginHref={LOGIN_HREF}
       {...overrides}
     />,
   );
@@ -92,5 +98,40 @@ describe('VotePanelView', () => {
     screen.getAllByRole('button').forEach((button) => {
       expect(button).toBeDisabled();
     });
+  });
+
+  it('로그인 상태에서는 로그인 안내 문구가 없다', () => {
+    renderPanel();
+
+    expect(screen.queryByText(LOGIN_NOTICE)).not.toBeInTheDocument();
+  });
+});
+
+describe('VotePanelView 비로그인', () => {
+  it('선택지 3개를 같은 순서의 로그인 링크로 보여준다', () => {
+    renderPanel({ isAuthenticated: false });
+
+    const links = screen.getAllByRole('link');
+
+    expect(links).toHaveLength(3);
+    expect(links[0]).toHaveAccessibleName('로그인 후 찬성 투표');
+    expect(links[1]).toHaveAccessibleName('로그인 후 아직 모르겠어요 투표');
+    expect(links[2]).toHaveAccessibleName('로그인 후 반대 투표');
+    links.forEach((link) => {
+      expect(link).toHaveAttribute('href', LOGIN_HREF);
+    });
+  });
+
+  it('투표 버튼 대신 로그인 안내 문구를 보여준다', () => {
+    renderPanel({ isAuthenticated: false });
+
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    expect(screen.getByText(LOGIN_NOTICE)).toBeInTheDocument();
+  });
+
+  it('이전 선택이 남아 있어도 결과 보기 링크를 노출하지 않는다', () => {
+    renderPanel({ isAuthenticated: false, selectedChoice: VoteChoice.AGREE });
+
+    expect(screen.queryByRole('link', { name: '결과 보기' })).not.toBeInTheDocument();
   });
 });

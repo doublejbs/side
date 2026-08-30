@@ -1,12 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ClaimFeedback } from '@/domain/ClaimFeedback';
+import type { SessionUser } from '@/domain/SessionUser';
 import { VoteChoice } from '@/domain/VoteChoice';
 import type { ClaimFeedbackResponse, VoteResultResponse } from '@/domain/VoteApiTypes';
-import { ANON_COOKIE_NAME } from '@/server/anonCookie';
-import type { AnonCookieReader } from '@/server/anonCookie';
 import { InMemoryVoteStore } from '@/server/InMemoryVoteStore';
-import { signCookieValue } from '@/server/signedCookie';
 import { VoteApiErrorCode } from '@/server/VoteApiErrorCode';
 import {
   handleCastVote,
@@ -15,16 +13,18 @@ import {
   serverVoteDisabledResponse,
 } from '@/server/voteHandlers';
 
-const SECRET = 'test-secret';
 const SLUG = 'work-week-4-5';
 const ISSUE_ID = 'issue-1';
 const CLAIM_ID = 'claim-1';
 
-const emptyCookies: AnonCookieReader = { get: () => undefined };
-
-const cookiesFor = (anonId: string): AnonCookieReader => ({
-  get: (name) => (name === ANON_COOKIE_NAME ? { value: signCookieValue(anonId, SECRET) } : undefined),
+const createSessionUser = (id: string): SessionUser => ({
+  id,
+  email: `${id}@example.test`,
+  name: '테스터',
+  avatarUrl: null,
 });
+
+const USER = createSessionUser('user-1');
 
 let store: InMemoryVoteStore;
 
@@ -36,8 +36,7 @@ describe('handleCastVote', () => {
   it('투표하면 갱신된 분포와 내 선택을 돌려준다', async () => {
     const response = await handleCastVote({
       store,
-      secret: SECRET,
-      cookieStore: cookiesFor('anon-1'),
+      sessionUser: USER,
       slug: SLUG,
       body: { choice: VoteChoice.AGREE },
     });
@@ -51,46 +50,55 @@ describe('handleCastVote', () => {
     } satisfies VoteResultResponse);
   });
 
-  it('익명 쿠키가 없으면 새로 발급한다', async () => {
+  it('비로그인이면 401 이다', async () => {
     const response = await handleCastVote({
       store,
-      secret: SECRET,
-      cookieStore: emptyCookies,
-      slug: SLUG,
-      body: { choice: VoteChoice.UNSURE },
-    });
-
-    expect(response.setCookie?.name).toBe(ANON_COOKIE_NAME);
-    expect(response.setCookie?.options.httpOnly).toBe(true);
-  });
-
-  it('이미 쿠키가 있으면 다시 발급하지 않는다', async () => {
-    const response = await handleCastVote({
-      store,
-      secret: SECRET,
-      cookieStore: cookiesFor('anon-1'),
+      sessionUser: null,
       slug: SLUG,
       body: { choice: VoteChoice.AGREE },
     });
 
-    expect(response.setCookie).toBeUndefined();
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({ error: VoteApiErrorCode.LOGIN_REQUIRED });
   });
 
-  it('같은 익명 식별자가 다시 투표하면 참여자 수는 그대로다', async () => {
-    const cookieStore = cookiesFor('anon-1');
-
+  it('비로그인 요청은 표를 남기지 않는다', async () => {
     await handleCastVote({
       store,
-      secret: SECRET,
-      cookieStore,
+      sessionUser: null,
+      slug: SLUG,
+      body: { choice: VoteChoice.AGREE },
+    });
+
+    await expect(store.countVotes(ISSUE_ID)).resolves.toEqual({
+      agree: 0,
+      disagree: 0,
+      unsure: 0,
+    });
+  });
+
+  it('표는 userId 로 저장된다', async () => {
+    await handleCastVote({
+      store,
+      sessionUser: USER,
+      slug: SLUG,
+      body: { choice: VoteChoice.AGREE },
+    });
+
+    await expect(store.getMyVote(ISSUE_ID, USER.id)).resolves.toBe(VoteChoice.AGREE);
+  });
+
+  it('같은 사용자가 다시 투표하면 참여자 수는 그대로다', async () => {
+    await handleCastVote({
+      store,
+      sessionUser: USER,
       slug: SLUG,
       body: { choice: VoteChoice.AGREE },
     });
 
     const response = await handleCastVote({
       store,
-      secret: SECRET,
-      cookieStore,
+      sessionUser: USER,
       slug: SLUG,
       body: { choice: VoteChoice.DISAGREE },
     });
@@ -106,23 +114,20 @@ describe('handleCastVote', () => {
   it('여러 사람이 투표하면 퍼센트 합이 100 이다', async () => {
     await handleCastVote({
       store,
-      secret: SECRET,
-      cookieStore: cookiesFor('anon-1'),
+      sessionUser: createSessionUser('user-1'),
       slug: SLUG,
       body: { choice: VoteChoice.AGREE },
     });
     await handleCastVote({
       store,
-      secret: SECRET,
-      cookieStore: cookiesFor('anon-2'),
+      sessionUser: createSessionUser('user-2'),
       slug: SLUG,
       body: { choice: VoteChoice.DISAGREE },
     });
 
     const response = await handleCastVote({
       store,
-      secret: SECRET,
-      cookieStore: cookiesFor('anon-3'),
+      sessionUser: createSessionUser('user-3'),
       slug: SLUG,
       body: { choice: VoteChoice.UNSURE },
     });
@@ -135,8 +140,7 @@ describe('handleCastVote', () => {
   it('선택지가 잘못되면 400 이다', async () => {
     const response = await handleCastVote({
       store,
-      secret: SECRET,
-      cookieStore: emptyCookies,
+      sessionUser: USER,
       slug: SLUG,
       body: { choice: 'MAYBE' },
     });
@@ -146,13 +150,7 @@ describe('handleCastVote', () => {
   });
 
   it('본문이 없으면 400 이다', async () => {
-    const response = await handleCastVote({
-      store,
-      secret: SECRET,
-      cookieStore: emptyCookies,
-      slug: SLUG,
-      body: null,
-    });
+    const response = await handleCastVote({ store, sessionUser: USER, slug: SLUG, body: null });
 
     expect(response.status).toBe(400);
   });
@@ -160,8 +158,7 @@ describe('handleCastVote', () => {
   it('없는 이슈면 404 이다', async () => {
     const response = await handleCastVote({
       store,
-      secret: SECRET,
-      cookieStore: emptyCookies,
+      sessionUser: USER,
       slug: 'unknown',
       body: { choice: VoteChoice.AGREE },
     });
@@ -173,12 +170,7 @@ describe('handleCastVote', () => {
 
 describe('handleGetMyVote', () => {
   it('투표하지 않았으면 빈 분포와 null 선택을 돌려준다', async () => {
-    const response = await handleGetMyVote({
-      store,
-      secret: SECRET,
-      cookieStore: cookiesFor('anon-1'),
-      slug: SLUG,
-    });
+    const response = await handleGetMyVote({ store, sessionUser: USER, slug: SLUG });
 
     expect(response.body).toEqual({
       slug: SLUG,
@@ -189,28 +181,39 @@ describe('handleGetMyVote', () => {
   });
 
   it('투표한 뒤에는 내 선택을 돌려준다', async () => {
-    const cookieStore = cookiesFor('anon-1');
-
     await handleCastVote({
       store,
-      secret: SECRET,
-      cookieStore,
+      sessionUser: USER,
       slug: SLUG,
       body: { choice: VoteChoice.DISAGREE },
     });
 
-    const response = await handleGetMyVote({ store, secret: SECRET, cookieStore, slug: SLUG });
+    const response = await handleGetMyVote({ store, sessionUser: USER, slug: SLUG });
 
     expect((response.body as VoteResultResponse).myChoice).toBe(VoteChoice.DISAGREE);
   });
 
-  it('없는 이슈면 404 이다', async () => {
-    const response = await handleGetMyVote({
+  it('비로그인이면 분포만 돌려주고 내 선택은 null 이다', async () => {
+    await handleCastVote({
       store,
-      secret: SECRET,
-      cookieStore: emptyCookies,
-      slug: 'unknown',
+      sessionUser: USER,
+      slug: SLUG,
+      body: { choice: VoteChoice.AGREE },
     });
+
+    const response = await handleGetMyVote({ store, sessionUser: null, slug: SLUG });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      slug: SLUG,
+      distribution: { agree: 100, disagree: 0, unsure: 0 },
+      participantCount: 1,
+      myChoice: null,
+    } satisfies VoteResultResponse);
+  });
+
+  it('없는 이슈면 404 이다', async () => {
+    const response = await handleGetMyVote({ store, sessionUser: null, slug: 'unknown' });
 
     expect(response.status).toBe(404);
   });
@@ -220,8 +223,7 @@ describe('handleClaimFeedback', () => {
   it('피드백을 저장하고 저장된 값을 돌려준다', async () => {
     const response = await handleClaimFeedback({
       store,
-      secret: SECRET,
-      cookieStore: cookiesFor('anon-1'),
+      sessionUser: USER,
       claimId: CLAIM_ID,
       body: { feedback: ClaimFeedback.PERSUADED },
     });
@@ -231,23 +233,34 @@ describe('handleClaimFeedback', () => {
       claimId: CLAIM_ID,
       feedback: ClaimFeedback.PERSUADED,
     } satisfies ClaimFeedbackResponse);
+    await expect(store.getMyClaimFeedback(CLAIM_ID, USER.id)).resolves.toBe(
+      ClaimFeedback.PERSUADED,
+    );
+  });
+
+  it('비로그인이면 401 이다', async () => {
+    const response = await handleClaimFeedback({
+      store,
+      sessionUser: null,
+      claimId: CLAIM_ID,
+      body: { feedback: ClaimFeedback.PERSUADED },
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({ error: VoteApiErrorCode.LOGIN_REQUIRED });
   });
 
   it('null 을 보내면 기록이 지워진다', async () => {
-    const cookieStore = cookiesFor('anon-1');
-
     await handleClaimFeedback({
       store,
-      secret: SECRET,
-      cookieStore,
+      sessionUser: USER,
       claimId: CLAIM_ID,
       body: { feedback: ClaimFeedback.PERSUADED },
     });
 
     const response = await handleClaimFeedback({
       store,
-      secret: SECRET,
-      cookieStore,
+      sessionUser: USER,
       claimId: CLAIM_ID,
       body: { feedback: null },
     });
@@ -258,8 +271,7 @@ describe('handleClaimFeedback', () => {
   it('없는 주장이면 404 이다', async () => {
     const response = await handleClaimFeedback({
       store,
-      secret: SECRET,
-      cookieStore: emptyCookies,
+      sessionUser: USER,
       claimId: 'unknown',
       body: { feedback: ClaimFeedback.PERSUADED },
     });
@@ -271,25 +283,12 @@ describe('handleClaimFeedback', () => {
   it('알 수 없는 피드백 값이면 400 이다', async () => {
     const response = await handleClaimFeedback({
       store,
-      secret: SECRET,
-      cookieStore: emptyCookies,
+      sessionUser: USER,
       claimId: CLAIM_ID,
       body: { feedback: 'WRONG' },
     });
 
     expect(response.status).toBe(400);
-  });
-
-  it('익명 쿠키가 없으면 새로 발급한다', async () => {
-    const response = await handleClaimFeedback({
-      store,
-      secret: SECRET,
-      cookieStore: emptyCookies,
-      claimId: CLAIM_ID,
-      body: { feedback: ClaimFeedback.NOT_PERSUADED },
-    });
-
-    expect(response.setCookie?.name).toBe(ANON_COOKIE_NAME);
   });
 });
 

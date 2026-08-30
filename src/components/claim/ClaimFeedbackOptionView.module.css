@@ -30,3 +30,9 @@
   background: var(--color-brand-tint);
   color: var(--color-brand);
 }
+
+/* 전역 `a:hover` 의 브랜드색을 덮어, 로그인 게이트 링크도 버튼과 같은 모습을 유지한다. */
+a.option:hover {
+  border-color: var(--color-muted-2);
+  color: var(--color-ink);
+}

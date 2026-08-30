@@ -11,3 +11,9 @@
   font-weight: 700;
   letter-spacing: 1px;
 }
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

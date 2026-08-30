@@ -1,0 +1,6 @@
+/* 로그인 링크(min-width 60px)와 프로필 버튼(44px)이 들어갈 자리를 미리 잡는다. */
+.placeholder {
+  display: block;
+  min-width: 60px;
+  height: 44px;
+}

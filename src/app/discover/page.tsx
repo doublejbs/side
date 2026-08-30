@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 
+import { AuthActionContainer } from '@/components/auth/AuthActionContainer';
 import { AppHeaderView } from '@/components/common/AppHeaderView';
 import { PageHeroView } from '@/components/common/PageHeroView';
 import { MostDifferentIssueContainer } from '@/components/discover/MostDifferentIssueContainer';
@@ -9,13 +10,16 @@ import { SimilarGroupContainer } from '@/components/discover/SimilarGroupContain
 import { getIssueRepository } from '@/data/getIssueRepository';
 import { toIssueSummary } from '@/domain/IssueSummary';
 import { toOpinionGroupSummary } from '@/domain/OpinionGroupSummary';
+import { buildLoginHref } from '@/lib/auth/buildLoginHref';
+import { isAuthEnabled } from '@/lib/auth/isAuthEnabled';
 
 import styles from './page.module.css';
 
 /**
  * 공개 화면은 정적으로 미리 만들고 60초마다 다시 만든다(ISR).
  * 검수에서 승인·반려한 결과는 `AdminActions` 의 `revalidatePath` 가 바로 반영한다.
- * 근거: `docs/PipelineSpec.md` 6장.
+ * 세션은 컨테이너들이 클라이언트에서 읽으므로 로그인을 켜도 정적 렌더가 유지된다.
+ * 근거: `docs/PipelineSpec.md` 6장 · `docs/AuthSpec.md` 4.4.
  */
 export const revalidate = 60;
 
@@ -29,16 +33,19 @@ const DiscoverPage = async () => {
   const mostDividedIssue = pickMostDividedIssue(candidates);
   const firstOpinionGroup = issues[0]?.opinionGroups[0];
   const similarGroup = firstOpinionGroup ? toOpinionGroupSummary(firstOpinionGroup) : null;
+  const loginHref = buildLoginHref('/discover');
 
   return (
     <main className={styles.page}>
-      <AppHeaderView />
+      <AppHeaderView
+        authAction={isAuthEnabled() ? <AuthActionContainer loginHref={loginHref} /> : null}
+      />
       <PageHeroView title="발견" description="새로운 관점을 찾는 공간이에요" />
 
       <div className={styles.content}>
-        <MostDifferentIssueContainer candidates={candidates} />
+        <MostDifferentIssueContainer candidates={candidates} loginHref={loginHref} />
         {mostDividedIssue ? <MostDividedIssueView issue={mostDividedIssue} /> : null}
-        {similarGroup ? <SimilarGroupContainer group={similarGroup} /> : null}
+        {similarGroup ? <SimilarGroupContainer group={similarGroup} loginHref={loginHref} /> : null}
       </div>
     </main>
   );

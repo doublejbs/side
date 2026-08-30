@@ -1,0 +1,34 @@
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 52px;
+  padding: 0 16px;
+  border-radius: var(--radius-control);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/*
+ * 아래 색은 각 공급자의 브랜드 가이드가 정한 값이라 디자인 토큰을 쓰지 않는다.
+ * (Google: 흰 배경 + 1px 회색 선 / 카카오: #FEE500 배경 + #191919 글자)
+ */
+.google {
+  border: 1px solid #dadce0;
+  background: #ffffff;
+  color: #1f1f1f;
+}
+
+.kakao {
+  border: 1px solid #fee500;
+  background: #fee500;
+  color: #191919;
+}

@@ -10,14 +10,18 @@ import { PrismaVoteStore } from '@/server/PrismaVoteStore';
  * (파이프라인용 `src/testing/FakePrismaClient.ts` 는 투표·피드백 모델을 다루지 않는다.)
  */
 interface FakeVoteRow {
+  id: string;
   issueId: string;
-  anonId: string;
+  anonId: string | null;
+  userId: string | null;
   choice: string;
 }
 
 interface FakeFeedbackRow {
+  id: string;
   claimId: string;
-  anonId: string;
+  anonId: string | null;
+  userId: string | null;
   feedback: string;
 }
 
@@ -28,11 +32,17 @@ interface FakeIssueRow {
 }
 
 interface UniqueVoteWhere {
-  issueId_anonId: { issueId: string; anonId: string };
+  issueId_userId: { issueId: string; userId: string };
 }
 
 interface UniqueFeedbackWhere {
-  claimId_anonId: { claimId: string; anonId: string };
+  claimId_userId: { claimId: string; userId: string };
+}
+
+interface OwnerWhere {
+  id?: { in: string[] };
+  anonId?: string | null;
+  userId?: string | null;
 }
 
 interface FakeDatabase {
@@ -50,18 +60,43 @@ interface FakeOptions {
 const createUniqueConstraintError = (): Error =>
   Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
 
+/** `where` 에 담긴 조건(id 목록·anonId·userId)을 모두 만족하는지 본다. */
+const matchesOwner = (
+  row: { id: string; anonId: string | null; userId: string | null },
+  where: OwnerWhere,
+): boolean => {
+  if (where.id && !where.id.in.includes(row.id)) {
+    return false;
+  }
+
+  if (where.anonId !== undefined && row.anonId !== where.anonId) {
+    return false;
+  }
+
+  if (where.userId !== undefined && row.userId !== where.userId) {
+    return false;
+  }
+
+  return true;
+};
+
 const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}) => {
   const db: FakeDatabase = { issues: [], claimIds: [], votes: [], feedbacks: [], ...seed };
 
   let shouldFailUpsert = options.failNextVoteUpsert ?? false;
+  let sequence = 0;
 
-  const findVote = ({ issueId_anonId: key }: UniqueVoteWhere): FakeVoteRow | undefined =>
-    db.votes.find((vote) => vote.issueId === key.issueId && vote.anonId === key.anonId);
+  const nextId = (prefix: string): string => {
+    sequence += 1;
 
-  const findFeedback = ({ claimId_anonId: key }: UniqueFeedbackWhere): FakeFeedbackRow | undefined =>
-    db.feedbacks.find(
-      (record) => record.claimId === key.claimId && record.anonId === key.anonId,
-    );
+    return `${prefix}-${sequence}`;
+  };
+
+  const findVote = ({ issueId_userId: key }: UniqueVoteWhere): FakeVoteRow | undefined =>
+    db.votes.find((vote) => vote.issueId === key.issueId && vote.userId === key.userId);
+
+  const findFeedback = ({ claimId_userId: key }: UniqueFeedbackWhere): FakeFeedbackRow | undefined =>
+    db.feedbacks.find((record) => record.claimId === key.claimId && record.userId === key.userId);
 
   const prisma = {
     issue: {
@@ -80,12 +115,17 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
         update,
       }: {
         where: UniqueVoteWhere;
-        create: FakeVoteRow;
+        create: { issueId: string; userId: string; choice: string };
         update: { choice: string };
       }) => {
         if (shouldFailUpsert) {
           shouldFailUpsert = false;
-          db.votes.push({ ...create, choice: VoteChoice.UNSURE });
+          db.votes.push({
+            id: nextId('vote'),
+            ...create,
+            anonId: null,
+            choice: VoteChoice.UNSURE,
+          });
 
           throw createUniqueConstraintError();
         }
@@ -98,17 +138,13 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
           return { ...existing };
         }
 
-        db.votes.push({ ...create });
+        const row: FakeVoteRow = { id: nextId('vote'), ...create, anonId: null };
 
-        return { ...create };
+        db.votes.push(row);
+
+        return { ...row };
       },
-      update: async ({
-        where,
-        data,
-      }: {
-        where: UniqueVoteWhere;
-        data: { choice: string };
-      }) => {
+      update: async ({ where, data }: { where: UniqueVoteWhere; data: { choice: string } }) => {
         const existing = findVote(where);
 
         if (!existing) {
@@ -123,6 +159,28 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
         const found = findVote(where);
 
         return found ? { choice: found.choice } : null;
+      },
+      findMany: async ({ where }: { where: OwnerWhere }) =>
+        db.votes.filter((vote) => matchesOwner(vote, where)).map((vote) => ({ ...vote })),
+      updateMany: async ({
+        where,
+        data,
+      }: {
+        where: OwnerWhere;
+        data: { userId: string; anonId: null };
+      }) => {
+        const targets = db.votes.filter((vote) => matchesOwner(vote, where));
+
+        targets.forEach((target) => Object.assign(target, data));
+
+        return { count: targets.length };
+      },
+      deleteMany: async ({ where }: { where: OwnerWhere }) => {
+        const before = db.votes.length;
+
+        db.votes = db.votes.filter((vote) => !matchesOwner(vote, where));
+
+        return { count: before - db.votes.length };
       },
       groupBy: async ({ where }: { where: { issueId: string } }) => {
         const counts = new Map<string, number>();
@@ -144,7 +202,7 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
         update,
       }: {
         where: UniqueFeedbackWhere;
-        create: FakeFeedbackRow;
+        create: { claimId: string; userId: string; feedback: string };
         update: { feedback: string };
       }) => {
         const existing = findFeedback(where);
@@ -155,15 +213,21 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
           return { ...existing };
         }
 
-        db.feedbacks.push({ ...create });
+        const row: FakeFeedbackRow = { id: nextId('feedback'), ...create, anonId: null };
 
-        return { ...create };
+        db.feedbacks.push(row);
+
+        return { ...row };
       },
-      deleteMany: async ({ where }: { where: { claimId: string; anonId: string } }) => {
+      deleteMany: async ({ where }: { where: OwnerWhere & { claimId?: string } }) => {
         const before = db.feedbacks.length;
 
         db.feedbacks = db.feedbacks.filter(
-          (record) => !(record.claimId === where.claimId && record.anonId === where.anonId),
+          (record) =>
+            !(
+              (where.claimId === undefined || record.claimId === where.claimId) &&
+              matchesOwner(record, where)
+            ),
         );
 
         return { count: before - db.feedbacks.length };
@@ -173,11 +237,27 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
 
         return found ? { feedback: found.feedback } : null;
       },
+      findMany: async ({ where }: { where: OwnerWhere }) =>
+        db.feedbacks.filter((record) => matchesOwner(record, where)).map((record) => ({ ...record })),
+      updateMany: async ({
+        where,
+        data,
+      }: {
+        where: OwnerWhere;
+        data: { userId: string; anonId: null };
+      }) => {
+        const targets = db.feedbacks.filter((record) => matchesOwner(record, where));
+
+        targets.forEach((target) => Object.assign(target, data));
+
+        return { count: targets.length };
+      },
     },
     claim: {
       findUnique: async ({ where }: { where: { id: string } }) =>
         db.claimIds.includes(where.id) ? { id: where.id } : null,
     },
+    $transaction: async (run: (tx: unknown) => Promise<unknown>) => run(prisma),
   };
 
   return { db, prisma: prisma as unknown as PrismaClient };
@@ -203,19 +283,22 @@ describe('PrismaVoteStore', () => {
     expect(await store.getIssueIdBySlug('not-exists')).toBeNull();
   });
 
-  it('투표를 저장하고 내 선택을 돌려준다', async () => {
-    await store.castVote('issue-1', 'anon-1', VoteChoice.AGREE);
+  it('투표를 userId 로 저장하고 내 선택을 돌려준다', async () => {
+    await store.castVote('issue-1', 'user-1', VoteChoice.AGREE);
 
-    expect(await store.getMyVote('issue-1', 'anon-1')).toBe(VoteChoice.AGREE);
-    expect(await store.getMyVote('issue-1', 'anon-2')).toBeNull();
+    expect(fake.db.votes).toEqual([
+      { id: 'vote-1', issueId: 'issue-1', anonId: null, userId: 'user-1', choice: VoteChoice.AGREE },
+    ]);
+    expect(await store.getMyVote('issue-1', 'user-1')).toBe(VoteChoice.AGREE);
+    expect(await store.getMyVote('issue-1', 'user-2')).toBeNull();
   });
 
   it('다시 투표해도 표는 1개만 남고 선택만 바뀐다', async () => {
-    await store.castVote('issue-1', 'anon-1', VoteChoice.AGREE);
-    await store.castVote('issue-1', 'anon-1', VoteChoice.DISAGREE);
+    await store.castVote('issue-1', 'user-1', VoteChoice.AGREE);
+    await store.castVote('issue-1', 'user-1', VoteChoice.DISAGREE);
 
     expect(fake.db.votes).toHaveLength(1);
-    expect(await store.getMyVote('issue-1', 'anon-1')).toBe(VoteChoice.DISAGREE);
+    expect(await store.getMyVote('issue-1', 'user-1')).toBe(VoteChoice.DISAGREE);
     expect(await store.countVotes('issue-1')).toEqual({ agree: 0, disagree: 1, unsure: 0 });
   });
 
@@ -226,10 +309,10 @@ describe('PrismaVoteStore', () => {
     );
     const conflictingStore = new PrismaVoteStore(conflicting.prisma);
 
-    await conflictingStore.castVote('issue-1', 'anon-1', VoteChoice.AGREE);
+    await conflictingStore.castVote('issue-1', 'user-1', VoteChoice.AGREE);
 
     expect(conflicting.db.votes).toHaveLength(1);
-    expect(await conflictingStore.getMyVote('issue-1', 'anon-1')).toBe(VoteChoice.AGREE);
+    expect(await conflictingStore.getMyVote('issue-1', 'user-1')).toBe(VoteChoice.AGREE);
   });
 
   it('유니크 제약이 아닌 오류는 그대로 올린다', async () => {
@@ -242,38 +325,113 @@ describe('PrismaVoteStore', () => {
     } as unknown as PrismaClient;
 
     await expect(
-      new PrismaVoteStore(broken).castVote('issue-1', 'anon-1', VoteChoice.AGREE),
+      new PrismaVoteStore(broken).castVote('issue-1', 'user-1', VoteChoice.AGREE),
     ).rejects.toThrow('연결 실패');
   });
 
   it('선택지별 표 수를 집계한다', async () => {
-    await store.castVote('issue-1', 'anon-1', VoteChoice.AGREE);
-    await store.castVote('issue-1', 'anon-2', VoteChoice.AGREE);
-    await store.castVote('issue-1', 'anon-3', VoteChoice.UNSURE);
-    await store.castVote('issue-2', 'anon-4', VoteChoice.DISAGREE);
+    await store.castVote('issue-1', 'user-1', VoteChoice.AGREE);
+    await store.castVote('issue-1', 'user-2', VoteChoice.AGREE);
+    await store.castVote('issue-1', 'user-3', VoteChoice.UNSURE);
+    await store.castVote('issue-2', 'user-4', VoteChoice.DISAGREE);
 
     expect(await store.countVotes('issue-1')).toEqual({ agree: 2, disagree: 0, unsure: 1 });
     expect(await store.countVotes('issue-3')).toEqual({ agree: 0, disagree: 0, unsure: 0 });
   });
 
+  it('아직 이전되지 않은 익명 표도 집계에 넣는다', async () => {
+    fake.db.votes.push({
+      id: 'vote-legacy',
+      issueId: 'issue-1',
+      anonId: 'anon-1',
+      userId: null,
+      choice: VoteChoice.DISAGREE,
+    });
+
+    await store.castVote('issue-1', 'user-1', VoteChoice.AGREE);
+
+    expect(await store.countVotes('issue-1')).toEqual({ agree: 1, disagree: 1, unsure: 0 });
+  });
+
   it('근거 피드백을 저장하고 바꾸고 해제한다', async () => {
-    await store.setClaimFeedback('claim-1', 'anon-1', ClaimFeedback.PERSUADED);
+    await store.setClaimFeedback('claim-1', 'user-1', ClaimFeedback.PERSUADED);
 
-    expect(await store.getMyClaimFeedback('claim-1', 'anon-1')).toBe(ClaimFeedback.PERSUADED);
+    expect(await store.getMyClaimFeedback('claim-1', 'user-1')).toBe(ClaimFeedback.PERSUADED);
 
-    await store.setClaimFeedback('claim-1', 'anon-1', ClaimFeedback.LACKS_EVIDENCE);
+    await store.setClaimFeedback('claim-1', 'user-1', ClaimFeedback.LACKS_EVIDENCE);
 
     expect(fake.db.feedbacks).toHaveLength(1);
-    expect(await store.getMyClaimFeedback('claim-1', 'anon-1')).toBe(ClaimFeedback.LACKS_EVIDENCE);
+    expect(await store.getMyClaimFeedback('claim-1', 'user-1')).toBe(ClaimFeedback.LACKS_EVIDENCE);
 
-    await store.setClaimFeedback('claim-1', 'anon-1', null);
+    await store.setClaimFeedback('claim-1', 'user-1', null);
 
     expect(fake.db.feedbacks).toHaveLength(0);
-    expect(await store.getMyClaimFeedback('claim-1', 'anon-1')).toBeNull();
+    expect(await store.getMyClaimFeedback('claim-1', 'user-1')).toBeNull();
   });
 
   it('주장 존재 여부를 확인한다', async () => {
     expect(await store.claimExists('claim-1')).toBe(true);
     expect(await store.claimExists('not-exists')).toBe(false);
+  });
+});
+
+describe('PrismaVoteStore 익명 레코드 이전', () => {
+  const seedLegacy = () => {
+    const fake = createFakePrisma({ issues: ISSUES, claimIds: ['claim-1'] });
+
+    fake.db.votes.push({
+      id: 'vote-anon',
+      issueId: 'issue-1',
+      anonId: 'anon-1',
+      userId: null,
+      choice: VoteChoice.AGREE,
+    });
+    fake.db.feedbacks.push({
+      id: 'feedback-anon',
+      claimId: 'claim-1',
+      anonId: 'anon-1',
+      userId: null,
+      feedback: ClaimFeedback.PERSUADED,
+    });
+
+    return fake;
+  };
+
+  it('익명 표와 피드백을 계정으로 옮기고 anonId 를 비운다', async () => {
+    const fake = seedLegacy();
+    const store = new PrismaVoteStore(fake.prisma);
+
+    expect(await store.claimAnonRecords('anon-1', 'user-1')).toEqual({ votes: 1, feedbacks: 1 });
+    expect(fake.db.votes).toEqual([
+      { id: 'vote-anon', issueId: 'issue-1', anonId: null, userId: 'user-1', choice: VoteChoice.AGREE },
+    ]);
+    expect(fake.db.feedbacks[0]).toMatchObject({ anonId: null, userId: 'user-1' });
+    expect(await store.getMyVote('issue-1', 'user-1')).toBe(VoteChoice.AGREE);
+  });
+
+  it('계정 레코드가 이미 있으면 익명 레코드를 지운다', async () => {
+    const fake = seedLegacy();
+    const store = new PrismaVoteStore(fake.prisma);
+
+    await store.castVote('issue-1', 'user-1', VoteChoice.DISAGREE);
+    await store.setClaimFeedback('claim-1', 'user-1', ClaimFeedback.NOT_PERSUADED);
+
+    expect(await store.claimAnonRecords('anon-1', 'user-1')).toEqual({ votes: 0, feedbacks: 0 });
+    expect(fake.db.votes).toHaveLength(1);
+    expect(await store.getMyVote('issue-1', 'user-1')).toBe(VoteChoice.DISAGREE);
+    expect(fake.db.feedbacks).toHaveLength(1);
+    expect(await store.getMyClaimFeedback('claim-1', 'user-1')).toBe(ClaimFeedback.NOT_PERSUADED);
+  });
+
+  it('옮길 익명 레코드가 없으면 아무것도 바꾸지 않는다', async () => {
+    const fake = seedLegacy();
+    const store = new PrismaVoteStore(fake.prisma);
+
+    expect(await store.claimAnonRecords('anon-other', 'user-1')).toEqual({
+      votes: 0,
+      feedbacks: 0,
+    });
+    expect(fake.db.votes[0].anonId).toBe('anon-1');
+    expect(fake.db.feedbacks[0].anonId).toBe('anon-1');
   });
 });

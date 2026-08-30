@@ -101,6 +101,27 @@ export const setVote = (issueId: string, choice: VoteChoice): VoteRecord => {
   return record;
 };
 
+/**
+ * 낙관적으로 써 둔 투표를 이전 값으로 되돌린다.
+ * `record` 가 null 이면 기록 자체를 지운다(처음 투표라 되돌릴 값이 없는 경우).
+ */
+export const restoreVote = (issueId: string, record: VoteRecord | null): void => {
+  const votes = getAllVotes();
+
+  if (record === null) {
+    const rest = { ...votes };
+
+    delete rest[issueId];
+    writeMap<VoteRecord>(VOTE_STORAGE_KEY, rest);
+    notifyChange();
+
+    return;
+  }
+
+  writeMap<VoteRecord>(VOTE_STORAGE_KEY, { ...votes, [issueId]: record });
+  notifyChange();
+};
+
 const getAllClaimFeedbacks = (): ClaimFeedbackMap =>
   readMap<ClaimFeedbackRecord>(CLAIM_FEEDBACK_STORAGE_KEY);
 

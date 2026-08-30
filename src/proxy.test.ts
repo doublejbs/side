@@ -25,40 +25,56 @@ describe('proxy', () => {
     delete process.env.ANON_COOKIE_SECRET;
   });
 
-  it('로그인 페이지는 그대로 통과시킨다', () => {
-    const response = proxy(createRequest('/admin/login'));
+  it('관리자 밖의 경로는 그대로 통과시킨다', async () => {
+    const response = await proxy(createRequest('/issues/work-week-4-5'));
 
     expect(response.headers.get('location')).toBeNull();
   });
 
-  it('유효한 세션 쿠키가 있으면 통과시킨다', () => {
-    const response = proxy(createRequest('/admin', createAdminSessionCookie(SECRET)));
+  it('로그인 페이지는 그대로 통과시킨다', async () => {
+    const response = await proxy(createRequest('/admin/login'));
 
     expect(response.headers.get('location')).toBeNull();
   });
 
-  it('쿠키가 없으면 next 파라미터를 붙여 로그인으로 보낸다', () => {
-    const response = proxy(createRequest('/admin/issues/abc'));
+  it('유효한 세션 쿠키가 있으면 통과시킨다', async () => {
+    const response = await proxy(createRequest('/admin', createAdminSessionCookie(SECRET)));
+
+    expect(response.headers.get('location')).toBeNull();
+  });
+
+  it('쿠키가 없으면 next 파라미터를 붙여 로그인으로 보낸다', async () => {
+    const response = await proxy(createRequest('/admin/issues/abc'));
     const location = new URL(response.headers.get('location') ?? '');
 
     expect(location.pathname).toBe('/admin/login');
     expect(location.searchParams.get('next')).toBe('/admin/issues/abc');
   });
 
-  it('만료·위조된 쿠키는 통과시키지 않는다', () => {
+  it('만료·위조된 쿠키는 통과시키지 않는다', async () => {
     const expired = createAdminSessionCookie(SECRET, Date.now() - 13 * 60 * 60 * 1000);
 
-    expect(proxy(createRequest('/admin', expired)).headers.get('location')).toContain('/admin/login');
-    expect(proxy(createRequest('/admin', 'forged.value')).headers.get('location')).toContain(
+    expect((await proxy(createRequest('/admin', expired))).headers.get('location')).toContain(
+      '/admin/login',
+    );
+    expect((await proxy(createRequest('/admin', 'forged.value'))).headers.get('location')).toContain(
       '/admin/login',
     );
   });
 
-  it('ANON_COOKIE_SECRET 이 없으면 모두 로그인으로 보낸다', () => {
+  it('ANON_COOKIE_SECRET 이 없으면 모두 로그인으로 보낸다', async () => {
     const cookie = createAdminSessionCookie(SECRET);
 
     delete process.env.ANON_COOKIE_SECRET;
 
-    expect(proxy(createRequest('/admin', cookie)).headers.get('location')).toContain('/admin/login');
+    expect((await proxy(createRequest('/admin', cookie))).headers.get('location')).toContain(
+      '/admin/login',
+    );
+  });
+
+  it('이름이 admin 으로 시작하는 다른 경로는 보호 대상이 아니다', async () => {
+    const response = await proxy(createRequest('/administrators'));
+
+    expect(response.headers.get('location')).toBeNull();
   });
 });

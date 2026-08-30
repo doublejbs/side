@@ -2,10 +2,9 @@ import { z } from 'zod';
 
 import { aggregateVotes } from '@/data/voteAggregation';
 import { ClaimFeedback } from '@/domain/ClaimFeedback';
+import type { SessionUser } from '@/domain/SessionUser';
 import { VoteChoice } from '@/domain/VoteChoice';
 import type { ClaimFeedbackResponse, VoteResultResponse } from '@/domain/VoteApiTypes';
-import { buildAnonCookie, readOrCreateAnonId } from '@/server/anonCookie';
-import type { AnonCookie, AnonCookieReader } from '@/server/anonCookie';
 import { VoteApiErrorCode } from '@/server/VoteApiErrorCode';
 import type { VoteStore } from '@/server/VoteStore';
 
@@ -13,14 +12,12 @@ import type { VoteStore } from '@/server/VoteStore';
 export interface HandlerResponse {
   status: number;
   body: unknown;
-  /** 익명 식별자를 새로 만들었을 때만 채워진다. */
-  setCookie?: AnonCookie;
 }
 
 interface BaseDeps {
   store: VoteStore;
-  secret: string;
-  cookieStore: AnonCookieReader;
+  /** 비로그인이면 null. 쓰기 API 는 401 로 막고, 읽기 API 는 내 선택만 비운다. */
+  sessionUser: SessionUser | null;
 }
 
 export interface VoteDeps extends BaseDeps {
@@ -49,33 +46,32 @@ const toErrorResponse = (status: number, error: VoteApiErrorCode): HandlerRespon
 export const serverVoteDisabledResponse = (): HandlerResponse =>
   toErrorResponse(503, VoteApiErrorCode.SERVER_VOTE_DISABLED);
 
+/** 로그인이 필요한 API 에 비로그인으로 들어왔을 때의 응답. */
+const loginRequiredResponse = (): HandlerResponse =>
+  toErrorResponse(401, VoteApiErrorCode.LOGIN_REQUIRED);
+
 const buildVoteResult = async (
   store: VoteStore,
   slug: string,
   issueId: string,
-  anonId: string,
+  userId: string | null,
 ): Promise<VoteResultResponse> => {
   const [counts, myChoice] = await Promise.all([
     store.countVotes(issueId),
-    store.getMyVote(issueId, anonId),
+    userId ? store.getMyVote(issueId, userId) : Promise.resolve(null),
   ]);
   const { distribution, participantCount } = aggregateVotes(counts);
 
   return { slug, distribution, participantCount, myChoice };
 };
 
-const withAnonCookie = (
-  response: HandlerResponse,
-  isNew: boolean,
-  anonId: string,
-  secret: string,
-): HandlerResponse => (isNew ? { ...response, setCookie: buildAnonCookie(anonId, secret) } : response);
-
-/** `GET /api/issues/[slug]/votes/me` — 현재 분포와 내 선택을 함께 돌려준다. */
+/**
+ * `GET /api/issues/[slug]/votes/me` — 현재 분포와 내 선택을 함께 돌려준다.
+ * 비로그인도 결과는 볼 수 있으므로 `myChoice` 만 null 이다(docs/AuthSpec.md 4.2).
+ */
 export const handleGetMyVote = async ({
   store,
-  secret,
-  cookieStore,
+  sessionUser,
   slug,
 }: VoteDeps): Promise<HandlerResponse> => {
   const issueId = await store.getIssueIdBySlug(slug);
@@ -84,20 +80,20 @@ export const handleGetMyVote = async ({
     return toErrorResponse(404, VoteApiErrorCode.ISSUE_NOT_FOUND);
   }
 
-  const { anonId, isNew } = readOrCreateAnonId(cookieStore, secret);
-  const body = await buildVoteResult(store, slug, issueId, anonId);
-
-  return withAnonCookie({ status: 200, body }, isNew, anonId, secret);
+  return { status: 200, body: await buildVoteResult(store, slug, issueId, sessionUser?.id ?? null) };
 };
 
-/** `POST /api/issues/[slug]/votes` — 1인 1표 upsert 후 갱신된 분포를 돌려준다. */
+/** `POST /api/issues/[slug]/votes` — 로그인 사용자 1인 1표 upsert 후 갱신된 분포를 돌려준다. */
 export const handleCastVote = async ({
   store,
-  secret,
-  cookieStore,
+  sessionUser,
   slug,
   body,
 }: CastVoteDeps): Promise<HandlerResponse> => {
+  if (!sessionUser) {
+    return loginRequiredResponse();
+  }
+
   const parsed = castVoteSchema.safeParse(body);
 
   if (!parsed.success) {
@@ -110,23 +106,22 @@ export const handleCastVote = async ({
     return toErrorResponse(404, VoteApiErrorCode.ISSUE_NOT_FOUND);
   }
 
-  const { anonId, isNew } = readOrCreateAnonId(cookieStore, secret);
+  await store.castVote(issueId, sessionUser.id, parsed.data.choice);
 
-  await store.castVote(issueId, anonId, parsed.data.choice);
-
-  const result = await buildVoteResult(store, slug, issueId, anonId);
-
-  return withAnonCookie({ status: 200, body: result }, isNew, anonId, secret);
+  return { status: 200, body: await buildVoteResult(store, slug, issueId, sessionUser.id) };
 };
 
 /** `POST /api/claims/[claimId]/feedback` — `feedback` 이 null 이면 기록을 지운다. */
 export const handleClaimFeedback = async ({
   store,
-  secret,
-  cookieStore,
+  sessionUser,
   claimId,
   body,
 }: ClaimFeedbackDeps): Promise<HandlerResponse> => {
+  if (!sessionUser) {
+    return loginRequiredResponse();
+  }
+
   const parsed = claimFeedbackSchema.safeParse(body);
 
   if (!parsed.success) {
@@ -137,14 +132,12 @@ export const handleClaimFeedback = async ({
     return toErrorResponse(404, VoteApiErrorCode.CLAIM_NOT_FOUND);
   }
 
-  const { anonId, isNew } = readOrCreateAnonId(cookieStore, secret);
-
-  await store.setClaimFeedback(claimId, anonId, parsed.data.feedback);
+  await store.setClaimFeedback(claimId, sessionUser.id, parsed.data.feedback);
 
   const responseBody: ClaimFeedbackResponse = {
     claimId,
-    feedback: await store.getMyClaimFeedback(claimId, anonId),
+    feedback: await store.getMyClaimFeedback(claimId, sessionUser.id),
   };
 
-  return withAnonCookie({ status: 200, body: responseBody }, isNew, anonId, secret);
+  return { status: 200, body: responseBody };
 };
