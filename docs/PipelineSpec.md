@@ -7,7 +7,7 @@
 
 | 항목 | 선택 |
 |---|---|
-| 뉴스 소스 | 네이버 뉴스 검색 Open API (`GET https://openapi.naver.com/v1/search/news.json`) |
+| 뉴스 소스 | 네이버 뉴스 검색 API (NAVER API HUB, `GET https://naverapihub.apigw.ntruss.com/search/v1/news`) |
 | LLM | OpenAI API — 임베딩 `text-embedding-3-small`, 생성 `gpt-5-mini`(환경변수로 교체 가능) |
 | DB | Postgres + Prisma ORM. 로컬은 `docker compose`(postgres:16), 운영은 Supabase 등 `DATABASE_URL` |
 | 관리자 | 같은 Next 앱의 `/admin`, `ADMIN_PASSWORD` 기반 세션 쿠키 |
@@ -17,8 +17,8 @@
 
 ```
 DATABASE_URL=postgresql://side:side@localhost:5432/side
-NAVER_CLIENT_ID=
-NAVER_CLIENT_SECRET=
+NCP_APIGW_API_KEY_ID=
+NCP_APIGW_API_KEY=
 OPENAI_API_KEY=
 OPENAI_TEXT_MODEL=gpt-5-mini
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
@@ -160,7 +160,7 @@ CLI: `npm run pipeline -- [collect|cluster|summarize|extract|link|all] [--issue 
 단계 모듈은 순수 함수 모듈이므로 camelCase 파일명을 쓴다(프로젝트 컨벤션).
 
 ### 4.1 수집 `collect` — `collectArticles.ts`, `NaverNewsClient.ts`
-- 활성 `SearchQuery`마다 `display=100&sort=date`로 최근 기사 조회(최대 3페이지). 헤더 `X-Naver-Client-Id/Secret`.
+- 활성 `SearchQuery`마다 `display=100&sort=date`로 최근 기사 조회(최대 3페이지). 헤더 `X-NCP-APIGW-API-KEY-ID/KEY`.
 - 응답 `items[]`: `title`, `originallink`, `link`, `description`, `pubDate`(RFC 2822). `<b>`·HTML 엔티티 제거(`stripHtml.ts`).
 - `naverLink` 기준 upsert(중복 무시). `publisher`는 `originallink` 도메인을 `publisherDirectory.ts`로 매핑(없으면 도메인 그대로).
 - `display`는 API 상한인 100(최소 1)으로 잘라서 보낸다 — 넘겨 보내면 400이 떨어진다.

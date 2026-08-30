@@ -6,15 +6,15 @@ type EnvSource = Record<string, string | undefined>;
 /** 파이프라인이 존재를 강제하는 환경 변수 이름. 단계별 필수 목록을 이 값들로 조립한다. */
 export enum PipelineEnvKey {
   DATABASE_URL = 'DATABASE_URL',
-  NAVER_CLIENT_ID = 'NAVER_CLIENT_ID',
-  NAVER_CLIENT_SECRET = 'NAVER_CLIENT_SECRET',
+  NCP_APIGW_API_KEY_ID = 'NCP_APIGW_API_KEY_ID',
+  NCP_APIGW_API_KEY = 'NCP_APIGW_API_KEY',
   OPENAI_API_KEY = 'OPENAI_API_KEY',
 }
 
 export interface PipelineEnv {
   databaseUrl: string;
-  naverClientId: string;
-  naverClientSecret: string;
+  ncpApigwApiKeyId: string;
+  ncpApigwApiKey: string;
   openAiApiKey: string;
   openAiTextModel: string;
   openAiEmbeddingModel: string;
@@ -30,8 +30,8 @@ export interface ReadPipelineEnvOptions {
 /** 인자 없이 부를 때 검사하는 기본 필수 목록. */
 export const ALL_REQUIRED_ENV_KEYS: PipelineEnvKey[] = [
   PipelineEnvKey.DATABASE_URL,
-  PipelineEnvKey.NAVER_CLIENT_ID,
-  PipelineEnvKey.NAVER_CLIENT_SECRET,
+  PipelineEnvKey.NCP_APIGW_API_KEY_ID,
+  PipelineEnvKey.NCP_APIGW_API_KEY,
   PipelineEnvKey.OPENAI_API_KEY,
 ];
 
@@ -64,8 +64,8 @@ export const readPipelineEnv = ({
 
   return {
     databaseUrl: read(source, PipelineEnvKey.DATABASE_URL),
-    naverClientId: read(source, PipelineEnvKey.NAVER_CLIENT_ID),
-    naverClientSecret: read(source, PipelineEnvKey.NAVER_CLIENT_SECRET),
+    ncpApigwApiKeyId: read(source, PipelineEnvKey.NCP_APIGW_API_KEY_ID),
+    ncpApigwApiKey: read(source, PipelineEnvKey.NCP_APIGW_API_KEY),
     openAiApiKey: read(source, PipelineEnvKey.OPENAI_API_KEY),
     openAiTextModel: read(source, 'OPENAI_TEXT_MODEL') || DEFAULT_TEXT_MODEL,
     openAiEmbeddingModel: read(source, 'OPENAI_EMBEDDING_MODEL') || DEFAULT_EMBEDDING_MODEL,

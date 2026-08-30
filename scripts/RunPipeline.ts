@@ -55,8 +55,8 @@ const ALL_STEPS: RunnableStep[] = [
 const REQUIRED_ENV_BY_STEP: Record<RunnableStep, PipelineEnvKey[]> = {
   [PipelineStep.COLLECT]: [
     PipelineEnvKey.DATABASE_URL,
-    PipelineEnvKey.NAVER_CLIENT_ID,
-    PipelineEnvKey.NAVER_CLIENT_SECRET,
+    PipelineEnvKey.NCP_APIGW_API_KEY_ID,
+    PipelineEnvKey.NCP_APIGW_API_KEY,
   ],
   [PipelineStep.CLUSTER]: [PipelineEnvKey.DATABASE_URL, PipelineEnvKey.OPENAI_API_KEY],
   [PipelineStep.SUMMARIZE]: [PipelineEnvKey.DATABASE_URL, PipelineEnvKey.OPENAI_API_KEY],
@@ -98,8 +98,8 @@ const createClients = (steps: RunnableStep[], dryRun: boolean): StepClients => {
   return {
     newsClient: lazily(() =>
       createNaverNewsClient({
-        clientId: env.naverClientId,
-        clientSecret: env.naverClientSecret,
+        clientId: env.ncpApigwApiKeyId,
+        clientSecret: env.ncpApigwApiKey,
       }),
     ),
     embeddingClient: lazily(() =>

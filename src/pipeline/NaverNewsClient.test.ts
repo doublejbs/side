@@ -67,15 +67,20 @@ describe('createNaverNewsClient', () => {
     const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
     const parsed = new URL(url);
 
-    expect(parsed.origin + parsed.pathname).toBe('https://openapi.naver.com/v1/search/news.json');
+    expect(parsed.origin + parsed.pathname).toBe('https://naverapihub.apigw.ntruss.com/search/v1/news');
     expect(parsed.searchParams.get('query')).toBe('국회 예산');
     expect(parsed.searchParams.get('display')).toBe('50');
     expect(parsed.searchParams.get('start')).toBe('101');
     expect(parsed.searchParams.get('sort')).toBe('date');
+    expect(parsed.searchParams.get('format')).toBe('json');
     expect(init.headers).toEqual({
-      'X-Naver-Client-Id': 'my-id',
-      'X-Naver-Client-Secret': 'my-secret',
+      'X-NCP-APIGW-API-KEY-ID': 'my-id',
+      'X-NCP-APIGW-API-KEY': 'my-secret',
     });
+    // 기존 헤더가 전송되지 않는지 확인
+    const headerRecord = init.headers as Record<string, unknown>;
+    expect(headerRecord['X-Naver-Client-Id']).toBeUndefined();
+    expect(headerRecord['X-Naver-Client-Secret']).toBeUndefined();
   });
 
   it('429 는 백오프 후 재시도하고 성공하면 결과를 돌려준다', async () => {

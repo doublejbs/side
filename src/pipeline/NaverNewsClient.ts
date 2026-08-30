@@ -1,5 +1,11 @@
 import { NaverNewsApiError } from '@/pipeline/NaverNewsApiError';
 
+/**
+ * 네이버 뉴스 검색 API 클라이언트.
+ * 공식 문서: https://api.ncloud-docs.com/docs/naver-api-hub-search-news
+ * (2026-07-31 이후 개발자센터 API는 차단되어 NAVER API HUB(NCP API Gateway)로 이관됨)
+ */
+
 /** 네이버 뉴스 검색 API 응답의 `items[]` 한 건. 원문 필드명을 그대로 쓴다. */
 export interface NaverNewsItem {
   title: string;
@@ -21,13 +27,15 @@ export interface NaverNewsClient {
 }
 
 export interface NaverNewsClientConfig {
+  /** NAVER API HUB(NCP API Gateway) 클라이언트 ID */
   clientId: string;
+  /** NAVER API HUB(NCP API Gateway) 클라이언트 시크릿 */
   clientSecret: string;
   fetchFn?: typeof fetch;
   sleepFn?: (ms: number) => Promise<void>;
 }
 
-const SEARCH_URL = 'https://openapi.naver.com/v1/search/news.json';
+const SEARCH_URL = 'https://naverapihub.apigw.ntruss.com/search/v1/news';
 
 /** 429/5xx 재시도 횟수. 500ms → 1000ms → 2000ms 로 백오프한다. */
 const MAX_RETRIES = 3;
@@ -79,12 +87,13 @@ export const createNaverNewsClient = (config: NaverNewsClientConfig): NaverNewsC
     url.searchParams.set('display', String(options.display));
     url.searchParams.set('start', String(options.start));
     url.searchParams.set('sort', 'date');
+    url.searchParams.set('format', 'json');
 
     return fetchFn(url.toString(), {
       method: 'GET',
       headers: {
-        'X-Naver-Client-Id': config.clientId,
-        'X-Naver-Client-Secret': config.clientSecret,
+        'X-NCP-APIGW-API-KEY-ID': config.clientId,
+        'X-NCP-APIGW-API-KEY': config.clientSecret,
       },
     });
   };

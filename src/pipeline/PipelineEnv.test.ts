@@ -5,8 +5,8 @@ import { PipelineEnvKey, readPipelineEnv } from '@/pipeline/PipelineEnv';
 
 const FULL_ENV = {
   DATABASE_URL: 'postgresql://side:side@localhost:5432/side',
-  NAVER_CLIENT_ID: 'naver-id',
-  NAVER_CLIENT_SECRET: 'naver-secret',
+  NCP_APIGW_API_KEY_ID: 'ncp-id',
+  NCP_APIGW_API_KEY: 'ncp-secret',
   OPENAI_API_KEY: 'openai-key',
 };
 
@@ -26,8 +26,8 @@ describe('readPipelineEnv', () => {
 
     expect(readPipelineEnv()).toEqual({
       databaseUrl: FULL_ENV.DATABASE_URL,
-      naverClientId: 'naver-id',
-      naverClientSecret: 'naver-secret',
+      ncpApigwApiKeyId: 'ncp-id',
+      ncpApigwApiKey: 'ncp-secret',
       openAiApiKey: 'openai-key',
       openAiTextModel: 'gpt-5-mini',
       openAiEmbeddingModel: 'text-embedding-3-small',
@@ -51,7 +51,7 @@ describe('readPipelineEnv', () => {
     stubProcessEnv({
       ...FULL_ENV,
       DATABASE_URL: undefined,
-      NAVER_CLIENT_SECRET: '   ',
+      NCP_APIGW_API_KEY: '   ',
     });
 
     try {
@@ -61,7 +61,7 @@ describe('readPipelineEnv', () => {
       expect(error).toBeInstanceOf(MissingEnvError);
       expect((error as MissingEnvError).missingKeys).toEqual([
         'DATABASE_URL',
-        'NAVER_CLIENT_SECRET',
+        'NCP_APIGW_API_KEY',
       ]);
     }
   });
@@ -69,7 +69,7 @@ describe('readPipelineEnv', () => {
   it('전달한 환경 객체를 읽을 수 있다', () => {
     const env = readPipelineEnv({ source: { ...FULL_ENV } });
 
-    expect(env.naverClientId).toBe('naver-id');
+    expect(env.ncpApigwApiKeyId).toBe('ncp-id');
   });
 
   it('requires 로 지정한 변수만 검사한다', () => {
@@ -102,8 +102,8 @@ describe('readPipelineEnv', () => {
     } catch (error) {
       expect((error as MissingEnvError).missingKeys).toEqual([
         'DATABASE_URL',
-        'NAVER_CLIENT_ID',
-        'NAVER_CLIENT_SECRET',
+        'NCP_APIGW_API_KEY_ID',
+        'NCP_APIGW_API_KEY',
         'OPENAI_API_KEY',
       ]);
     }
