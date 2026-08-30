@@ -47,6 +47,7 @@ npm run pipeline -- all --dry-run  # 외부 호출 없이 전 단계 실행
 - 목 데이터는 `src/data/`에만 두고 리포지토리를 통해서만 접근한다. Repository 호출은 서버 컴포넌트(`page.tsx`)에서만 하고, 클라이언트에는 필요한 값만 props로 넘긴다.
 - 리포지토리는 **비동기 인터페이스**(`IssueRepository`)로 선언하고, 구현은 `Mock*`(목 데이터) / `Prisma*`(DB) 두 벌을 둔다. 호출부는 `getIssueRepository()`로만 구현을 고른다.
 - 이슈의 URL 식별자는 `slug`다. 라우트 파라미터 이름은 `[issueId]`지만 값은 slug이며, 링크·투표 기록 키도 slug를 쓴다.
+- **로컬 DB를 초기화하는 명령(`prisma migrate reset`, `prisma db push --force-reset`, `DROP`/`TRUNCATE`)은 사용자 확인 없이 절대 실행하지 않는다.** 마이그레이션 이력이 어긋나면 `prisma migrate resolve --applied <name>`으로 베이스라인만 맞춘다. 서브에이전트 프롬프트에도 이 금지를 명시한다.
 - 테스트 파일은 대상 파일 옆에 `*.test.ts(x)`로 둔다.
 
 ## 로컬 HTTPS 개발 서버
