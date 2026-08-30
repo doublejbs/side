@@ -5,6 +5,7 @@ import type { Issue } from '@/domain/Issue';
 
 export const workWeekIssue: Issue = {
   id: 'work-week-4-5',
+  slug: 'work-week-4-5',
   question: '주 4.5일제를 도입해야 할까?',
   tags: ['노동', '경제'],
   participantCount: 12481,

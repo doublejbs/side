@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { getIssues } from '@/data/IssueRepository';
+import { MOCK_ISSUES } from '@/data/MockIssueRepository';
 import { toIssueResultSummary } from '@/domain/IssueResultSummary';
 
-const issue = getIssues()[0];
+const issue = MOCK_ISSUES[0];
 
 describe('toIssueResultSummary', () => {
   it('투표 결과 화면에 필요한 값만 남긴다', () => {
@@ -12,12 +12,12 @@ describe('toIssueResultSummary', () => {
     expect(Object.keys(summary).sort()).toEqual([
       'claims',
       'distribution',
-      'id',
       'opinionGroups',
       'participantCount',
       'question',
+      'slug',
     ]);
-    expect(summary.id).toBe(issue.id);
+    expect(summary.slug).toBe(issue.slug);
     expect(summary.question).toBe(issue.question);
     expect(summary.participantCount).toBe(issue.participantCount);
     expect(summary.distribution).toEqual(issue.distribution);

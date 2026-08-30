@@ -1,0 +1,2 @@
+# 이 파일은 Prisma가 관리한다. 수동 편집·삭제 금지.
+provider = "postgresql"

@@ -2,9 +2,9 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { IssueCardView } from '@/components/home/IssueCardView';
-import { getIssues } from '@/data/IssueRepository';
+import { MOCK_ISSUES } from '@/data/MockIssueRepository';
 
-const issue = getIssues()[0];
+const issue = MOCK_ISSUES[0];
 
 describe('IssueCardView', () => {
   it('질문과 태그 칩을 렌더한다', () => {

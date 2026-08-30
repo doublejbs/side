@@ -5,6 +5,7 @@ import type { Issue } from '@/domain/Issue';
 
 export const aiRegulationIssue: Issue = {
   id: 'ai-regulation',
+  slug: 'ai-regulation',
   question: 'AI 규제를 강화해야 할까?',
   tags: ['기술', '산업'],
   participantCount: 5140,

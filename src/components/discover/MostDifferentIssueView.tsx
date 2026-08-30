@@ -26,7 +26,7 @@ export const MostDifferentIssueView = ({ issue, myChoice }: Props) => (
     <SectionTitleView>당신과 가장 다른 의견</SectionTitleView>
     {issue && myChoice ? (
       <CardView as={CardElement.ARTICLE} className={styles.card}>
-        <IssueQuestionLinkView issueId={issue.id} question={issue.question} />
+        <IssueQuestionLinkView issueId={issue.slug} question={issue.question} />
         <div className={styles.compareRow}>
           <ChipView tone={getVoteChoiceChipTone(myChoice)}>
             {`내 선택 · ${getVoteChoiceLabel(myChoice)}`}

@@ -29,7 +29,7 @@ export const IssueCardView = ({ issue, featured = false }: Props) => {
   );
 
   return (
-    <Link href={`/issues/${issue.id}`} className={styles.link}>
+    <Link href={`/issues/${issue.slug}`} className={styles.link}>
       <CardView as={CardElement.ARTICLE} className={`${styles.card} ${featured ? styles.featured : styles.compact}`}>
         {featured ? (
           tags

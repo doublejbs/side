@@ -105,13 +105,13 @@ interface OpinionGroup { id: string; label: string /* '그룹 A' */; share: numb
 ```
 
 ```ts
-// src/domain/IssueSummary.ts — 홈·발견에서 클라이언트로 넘기는 경량 이슈 정보
-interface IssueSummary { id: string; question: string; distribution: VoteDistribution; tags: string[] }
+// src/domain/IssueSummary.ts — 홈·발견·목록 API 에서 넘기는 경량 이슈 정보
+interface IssueSummary { slug: string; question: string; participantCount: number; distribution: VoteDistribution; tags: string[] }
 
 // src/domain/IssueResultSummary.ts — 투표 결과 화면으로 넘기는 경량 이슈 정보
 interface ClaimSummary { id: string; side: ClaimSide; title: string; evidenceCount: number }
 interface IssueResultSummary {
-  id: string; question: string; participantCount: number; distribution: VoteDistribution;
+  slug: string; question: string; participantCount: number; distribution: VoteDistribution;
   claims: ClaimSummary[]; opinionGroups: OpinionGroup[];
 }
 
@@ -132,11 +132,16 @@ interface OpinionChange { issueId: string; before: VoteRecord; after: VoteRecord
 ## 5. 데이터 계층
 
 - `src/data/issues/*.ts` — 이슈별 목 데이터 5건 (주 4.5일제, 원전, 정년 65세, AI 규제, 부동산 보유세). Lorem ipsum 금지, 브리프 샘플 수치 사용.
-- `src/data/IssueRepository.ts` — `getIssues()`, `getIssueById(id)`, `getClaimById(issueId, claimId)`. 동기 함수 (서버 컴포넌트에서 직접 호출).
+- `src/data/IssueRepository.ts` — 이슈 읽기 인터페이스. `listPublishedIssues()`, `getIssueBySlug(slug)`, `getClaimById(slug, claimId)`, `listSlugs()`, `listClaimParams()`. 모두 **비동기**이며 서버 컴포넌트에서 `await getIssueRepository().xxx()` 로 호출한다. 구현은 `MockIssueRepository`(목 데이터) / `PrismaIssueRepository`(DB) 두 벌이다(`docs/PipelineSpec.md` 6장).
+  - `listClaimParams()` 는 근거 화면 `generateStaticParams` 가 쓰는 `{ slug, claimId }` 조합을 한 번에 돌려준다(이슈를 slug 마다 다시 읽지 않는다).
+  - `PrismaIssueRepository` 는 피드백·기사 행을 전량 읽지 않는다. 설득됐어요 수는 `_count.feedbacks`(PERSUADED 필터), 원문 기사 수는 `_count.articles`, 매체 수는 `(issueId, publisher)` distinct 질의 1회로 센다.
 - `src/data/perspectiveData.ts` — 나 탭 축 5개, 의견 변화 1건, 참여 요약(`PARTICIPATION_SUMMARY`).
-- `src/store/UserRecordStore.ts` — `localStorage` 래퍼. 키 `side:votes`, `side:claimFeedback`. SSR 안전(`typeof window` 가드). API: `getVote(issueId)`, `setVote(issueId, choice)`, `getClaimFeedback(claimId)`, `setClaimFeedback(claimId, feedback)`, `getAllVotes()`.
-- `src/store/useVote.ts` — 클라이언트 훅. `{ vote, castVote }`. 마운트 후 localStorage 로드.
+- `src/store/UserRecordStore.ts` — `localStorage` 래퍼. 키는 `side:votes`, `side:claimFeedback` **두 개뿐이다**(서버 분포는 저장하지 않는다). SSR 안전(`typeof window` 가드). API: `getVote(issueId)`, `setVote(issueId, choice)`, `getClaimFeedback(claimId)`, `setClaimFeedback(claimId, feedback)`, `getAllVotes()`.
+- `src/store/VoteResultCache.ts` — 서버가 집계한 분포를 담는 **모듈 스코프 메모리 저장소**(`useSyncExternalStore` 구독). 앱이 살아 있는 동안만 유지하므로 오래된 분포가 고착되지 않는다. 요청 순번(`nextVoteRequestSeq`)을 발행해, 늦게 도착한 조회 응답이 더 최근 투표 결과를 덮어쓰지 않게 한다.
+- `src/store/useVote.ts` — 클라이언트 훅. `{ vote, isLoaded, serverResult, error, castVote }`. 내 선택은 localStorage 에, 서버 분포는 `VoteResultCache` 에 둔다. `error` 는 서버 저장·조회 실패이며 컨테이너가 인라인 안내로 보여준다.
+- `src/store/useServerVoteSync.ts` — 결과 화면이 마운트될 때마다 `GET /votes/me` 로 분포를 다시 받아온다(초기 페인트는 서버 렌더 분포).
 - `src/store/useUserVotes.ts` — 클라이언트 훅. 전체 투표 기록 맵을 구독한다(발견·나 탭).
+- `src/store/useClaimFeedback.ts` — 클라이언트 훅. `{ feedback, isLoaded, error, toggleFeedback }`.
 
 ### 투표 반영 규칙
 
@@ -149,6 +154,7 @@ interface OpinionChange { issueId: string; before: VoteRecord; after: VoteRecord
 - Hero: 공통 `PageHeroView` — "오늘의 이슈" / "지금 사람들이 의견을 나누고 있는 질문들".
 - 첫 카드는 대형(24px 질문, 태그 칩, 3분할 분포 바 10px, 퍼센트 3개, 참여자, "3분 만에 이해하기 →"), 나머지 카드는 컴팩트(18px).
 - 카드 전체가 `/issues/[id]` 링크.
+- 클라이언트·API 로 넘기는 경량 정보(`IssueSummary`)에는 참여자 수가 포함된다(`GET /api/issues` 응답도 같다).
 - 하단 탭바 3개(이슈/발견/나), 현재 탭 강조.
 
 ### 02 이슈 상세 `/issues/[issueId]`
@@ -199,6 +205,8 @@ src/
     issues/[issueId]/page.tsx
     issues/[issueId]/result/page.tsx
     issues/[issueId]/claims/[claimId]/page.tsx
+    api/                       # 앱이 쓰는 REST 라우트 (이슈 목록·상세, 투표, 근거 피드백)
+    admin/(review)/            # 관리자 검수 화면 라우트 그룹 (로그인 화면만 그룹 밖)
   components/
     common/  AppShellView, AppHeaderView, PageHeroView, HeaderActionButtonView, TabBarView,
              ChipView(+ChipTone, claimSideChipTone, voteChoiceChipTone),
@@ -222,6 +230,10 @@ src/
             voteChoiceLabel.ts, claimSidePresenter.ts
   data/     issues/*.ts, IssueRepository.ts, perspectiveData.ts
   store/    UserRecordStore.ts, useVote.ts, useUserVotes.ts, useClaimFeedback.ts
+  server/   서버 전용 모듈 — 관리자 세션·서버 액션 유스케이스, 투표 저장소, 쿠키 서명
+  pipeline/ 뉴스 수집부터 논점 추출까지의 파이프라인 단계와 외부 클라이언트 경계
+  testing/  테스트에서만 쓰는 가짜 구현 (FakePrismaClient 등)
+  proxy.ts  Next 16의 middleware 대체 파일 — /admin/** 세션 쿠키 검사
 ```
 
 - 뷰 컴포넌트는 `*View.tsx`, 상태 훅은 `use*State.ts`, 순수 함수 모듈은 camelCase. `index.ts` 금지, re-export 금지.

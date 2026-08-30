@@ -1,0 +1,97 @@
+import { AdminBannerTone } from '@/components/admin/AdminBannerTone';
+import { AdminBannerView } from '@/components/admin/AdminBannerView';
+import { AdminSectionView } from '@/components/admin/AdminSectionView';
+import { AdminTextAreaFieldView } from '@/components/admin/AdminTextAreaFieldView';
+import { ClaimEditorListView } from '@/components/admin/ClaimEditorListView';
+import { IssueActionBarView } from '@/components/admin/IssueActionBarView';
+import { IssueBasicFieldsView } from '@/components/admin/IssueBasicFieldsView';
+import { MediaPerspectiveEditorView } from '@/components/admin/MediaPerspectiveEditorView';
+import { OpinionGroupEditorView } from '@/components/admin/OpinionGroupEditorView';
+import { ReviewArticleListView } from '@/components/admin/ReviewArticleListView';
+import { ISSUE_STATUS_LABEL } from '@/components/admin/adminLabels';
+import { formatAdminDate } from '@/components/admin/formatAdminDate';
+import { AdminFormField } from '@/server/AdminFormField';
+import type { AdminIssueDetail } from '@/server/AdminStore';
+
+import styles from './IssueReviewFormView.module.css';
+
+interface Props {
+  issue: AdminIssueDetail;
+  saveIssueAction: (formData: FormData) => Promise<void>;
+  saveClaimAction: (formData: FormData) => Promise<void>;
+  publishIssueAction: (formData: FormData) => Promise<void>;
+  rejectIssueAction: (formData: FormData) => Promise<void>;
+  regenerateIssueAction: (formData: FormData) => Promise<void>;
+  updateEvidenceTypeAction: (formData: FormData) => Promise<void>;
+  deleteEvidenceAction: (formData: FormData) => Promise<void>;
+}
+
+/**
+ * 검수 폼 전체. 폼은 하나만 두고, 카드마다 `formAction` 으로 다른 서버 액션에 제출한다.
+ * (HTML 은 폼 중첩을 허용하지 않는다.)
+ */
+export const IssueReviewFormView = ({
+  issue,
+  saveIssueAction,
+  saveClaimAction,
+  publishIssueAction,
+  rejectIssueAction,
+  regenerateIssueAction,
+  updateEvidenceTypeAction,
+  deleteEvidenceAction,
+}: Props) => (
+  <form action={saveIssueAction} className={styles.form}>
+    <input type="hidden" name={AdminFormField.ISSUE_ID} value={issue.id} />
+
+    <header className={styles.header}>
+      <h1 className={styles.question}>{issue.question}</h1>
+      <p className={styles.meta}>
+        {ISSUE_STATUS_LABEL[issue.status]} · 생성 {formatAdminDate(issue.createdAt)}
+        {issue.slug ? ` · /issues/${issue.slug}` : ''}
+      </p>
+    </header>
+
+    {issue.reviewNote ? (
+      <AdminBannerView tone={AdminBannerTone.WARNING} title="검수 메모">
+        {issue.reviewNote}
+      </AdminBannerView>
+    ) : null}
+
+    <IssueBasicFieldsView
+      question={issue.question}
+      tags={issue.tags}
+      summary={issue.summary}
+      keyPoints={issue.keyPoints}
+    />
+
+    <ClaimEditorListView
+      claims={issue.claims}
+      saveClaimAction={saveClaimAction}
+      updateEvidenceTypeAction={updateEvidenceTypeAction}
+      deleteEvidenceAction={deleteEvidenceAction}
+    />
+
+    <MediaPerspectiveEditorView mediaPerspectives={issue.mediaPerspectives} />
+
+    <AdminSectionView title="공통 내용" description="성향과 관계없이 모든 매체가 함께 다룬 사실.">
+      <AdminTextAreaFieldView
+        label="공통 내용"
+        name={AdminFormField.COMMON_COVERAGE}
+        defaultValue={issue.commonCoverage.join('\n')}
+        rows={4}
+        description="한 줄에 하나씩."
+      />
+    </AdminSectionView>
+
+    <OpinionGroupEditorView issueId={issue.id} opinionGroups={issue.opinionGroups} />
+
+    <ReviewArticleListView articles={issue.articles} />
+
+    <IssueActionBarView
+      status={issue.status}
+      publishIssueAction={publishIssueAction}
+      rejectIssueAction={rejectIssueAction}
+      regenerateIssueAction={regenerateIssueAction}
+    />
+  </form>
+);

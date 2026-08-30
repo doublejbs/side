@@ -1,13 +1,38 @@
-import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { VoteChoice } from '@/domain/VoteChoice';
+import type { VoteResultResponse } from '@/domain/VoteApiTypes';
 import { setVote } from '@/store/UserRecordStore';
 import { useVote } from '@/store/useVote';
+import { castVoteRequest } from '@/store/VoteApiClient';
+import {
+  getVoteResult,
+  nextVoteRequestSeq,
+  publishVoteResult,
+  resetVoteResults,
+} from '@/store/VoteResultCache';
+
+vi.mock('@/store/VoteApiClient', () => ({
+  castVoteRequest: vi.fn(),
+  fetchMyVote: vi.fn(),
+  sendClaimFeedback: vi.fn(),
+}));
+
+const castVoteRequestMock = vi.mocked(castVoteRequest);
+
+const SERVER_RESULT: VoteResultResponse = {
+  slug: 'work-week-4-5',
+  distribution: { agree: 55, disagree: 35, unsure: 10 },
+  participantCount: 20,
+  myChoice: VoteChoice.AGREE,
+};
 
 describe('useVote', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    resetVoteResults();
+    castVoteRequestMock.mockReset();
   });
 
   it('저장된 투표가 없으면 null을 반환하고 로드 완료를 알린다', () => {
@@ -46,5 +71,99 @@ describe('useVote', () => {
 
     expect(workWeek.result.current.vote?.choice).toBe(VoteChoice.AGREE);
     expect(nuclear.result.current.vote).toBeNull();
+  });
+});
+
+describe('useVote 서버 모드', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    resetVoteResults();
+    castVoteRequestMock.mockReset();
+  });
+
+  it('목 모드에서는 서버를 호출하지 않는다', () => {
+    const { result } = renderHook(() => useVote('work-week-4-5'));
+
+    act(() => {
+      result.current.castVote(VoteChoice.AGREE);
+    });
+
+    expect(castVoteRequestMock).not.toHaveBeenCalled();
+    expect(result.current.serverResult).toBeNull();
+  });
+
+  it('서버 모드에서는 로컬에 먼저 기록하고 서버에 투표를 보낸다', async () => {
+    castVoteRequestMock.mockResolvedValue(SERVER_RESULT);
+
+    const { result } = renderHook(() =>
+      useVote('work-week-4-5', { isServerEnabled: true }),
+    );
+
+    act(() => {
+      result.current.castVote(VoteChoice.AGREE);
+    });
+
+    expect(result.current.vote?.choice).toBe(VoteChoice.AGREE);
+    expect(castVoteRequestMock).toHaveBeenCalledWith('work-week-4-5', VoteChoice.AGREE);
+
+    await waitFor(() => {
+      expect(result.current.serverResult).toEqual(SERVER_RESULT);
+    });
+    expect(getVoteResult('work-week-4-5')).toEqual(SERVER_RESULT);
+  });
+
+  it('늦게 도착한 투표 응답은 더 최근 결과를 덮어쓰지 않는다', async () => {
+    let resolveCast: (result: VoteResultResponse) => void = () => {};
+
+    castVoteRequestMock.mockReturnValue(
+      new Promise<VoteResultResponse>((resolve) => {
+        resolveCast = resolve;
+      }),
+    );
+
+    const { result } = renderHook(() => useVote('work-week-4-5', { isServerEnabled: true }));
+
+    act(() => {
+      result.current.castVote(VoteChoice.AGREE);
+    });
+
+    const latest: VoteResultResponse = { ...SERVER_RESULT, participantCount: 99 };
+
+    act(() => {
+      publishVoteResult('work-week-4-5', latest, nextVoteRequestSeq());
+    });
+    act(() => {
+      resolveCast(SERVER_RESULT);
+    });
+
+    await waitFor(() => {
+      expect(result.current.serverResult).toEqual(latest);
+    });
+  });
+
+  it('서버 저장이 실패해도 로컬 기록은 남기고 오류를 노출한다', async () => {
+    castVoteRequestMock.mockRejectedValue(new Error('네트워크 오류'));
+
+    const { result } = renderHook(() =>
+      useVote('work-week-4-5', { isServerEnabled: true }),
+    );
+
+    act(() => {
+      result.current.castVote(VoteChoice.DISAGREE);
+    });
+
+    await waitFor(() => {
+      expect(result.current.error?.message).toBe('네트워크 오류');
+    });
+    expect(result.current.vote?.choice).toBe(VoteChoice.DISAGREE);
+    expect(result.current.serverResult).toBeNull();
+  });
+
+  it('목 모드에서는 서버 분포를 읽지 않는다', () => {
+    publishVoteResult('work-week-4-5', SERVER_RESULT, nextVoteRequestSeq());
+
+    const { result } = renderHook(() => useVote('work-week-4-5'));
+
+    expect(result.current.serverResult).toBeNull();
   });
 });

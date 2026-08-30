@@ -2,35 +2,28 @@ import type { VoteDistribution } from '@/domain/Issue';
 import type { IssueSummary } from '@/domain/IssueSummary';
 import type { VoteRecord } from '@/domain/UserRecord';
 import { VoteChoice } from '@/domain/VoteChoice';
+import { getVoteChoiceKey } from '@/domain/voteChoiceKey';
 
 interface Candidate {
   issue: IssueSummary;
   share: number;
 }
 
-const DISTRIBUTION_KEY: Record<VoteChoice, keyof VoteDistribution> = {
-  [VoteChoice.AGREE]: 'agree',
-  [VoteChoice.DISAGREE]: 'disagree',
-  [VoteChoice.UNSURE]: 'unsure',
-};
-
 /** 내 선택과 같은 응답을 한 사람의 전체 비율(%). */
-const getMyChoiceShare = (
-  distribution: VoteDistribution,
-  choice: VoteChoice,
-): number => distribution[DISTRIBUTION_KEY[choice]];
+const getMyChoiceShare = (distribution: VoteDistribution, choice: VoteChoice): number =>
+  distribution[getVoteChoiceKey(choice)];
 
 /** 찬성과 반대의 퍼센트 차이(%p). */
 export const getAgreeDisagreeGap = (issue: IssueSummary): number =>
   Math.abs(issue.distribution.agree - issue.distribution.disagree);
 
-/** 내가 투표한 이슈 중 내 선택의 전체 비율이 가장 낮은 이슈. 투표 기록이 없으면 null. */
+/** 내가 투표한 이슈 중 내 선택의 전체 비율이 가장 낮은 이슈. 투표 기록 키는 slug 다. */
 export const pickMostDifferentIssue = (
   issues: IssueSummary[],
   votes: Record<string, VoteRecord>,
 ): IssueSummary | null => {
   const candidates: Candidate[] = issues.flatMap((issue) => {
-    const vote = votes[issue.id];
+    const vote = votes[issue.slug];
 
     if (!vote) {
       return [];

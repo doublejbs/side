@@ -11,7 +11,8 @@ export interface ClaimSummary {
 
 /** 투표 결과 화면에서 쓰는 경량 이슈 정보. */
 export interface IssueResultSummary {
-  id: string;
+  /** 이슈 상세 링크와 투표 기록 키로 쓰는 URL 식별자. */
+  slug: string;
   question: string;
   participantCount: number;
   distribution: VoteDistribution;
@@ -20,7 +21,7 @@ export interface IssueResultSummary {
 }
 
 export const toIssueResultSummary = (issue: Issue): IssueResultSummary => ({
-  id: issue.id,
+  slug: issue.slug,
   question: issue.question,
   participantCount: issue.participantCount,
   distribution: issue.distribution,

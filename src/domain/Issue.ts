@@ -63,6 +63,8 @@ export interface OpinionGroup {
 
 export interface Issue {
   id: string;
+  /** URL 식별자. 목 데이터는 id와 같은 값을 쓴다. */
+  slug: string;
   question: string;
   tags: string[];
   participantCount: number;

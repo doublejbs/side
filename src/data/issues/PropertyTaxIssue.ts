@@ -5,6 +5,7 @@ import type { Issue } from '@/domain/Issue';
 
 export const propertyTaxIssue: Issue = {
   id: 'property-tax',
+  slug: 'property-tax',
   question: '부동산 보유세를 강화해야 할까?',
   tags: ['부동산', '경제'],
   participantCount: 4760,

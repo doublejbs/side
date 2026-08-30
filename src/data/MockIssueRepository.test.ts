@@ -3,49 +3,71 @@ import { describe, expect, it } from 'vitest';
 import { ClaimSide } from '@/domain/ClaimSide';
 import { EvidenceType } from '@/domain/EvidenceType';
 import { MediaLeaning } from '@/domain/MediaLeaning';
-import { getClaimById, getIssueById, getIssues } from '@/data/IssueRepository';
+import { MockIssueRepository } from '@/data/MockIssueRepository';
 import type { Issue } from '@/domain/Issue';
 
-const issues = getIssues();
+const repository = new MockIssueRepository();
+const issues = await repository.listPublishedIssues();
 
 const EXPECTED_ISSUES = [
-  { id: 'work-week-4-5', participantCount: 12481, distribution: { agree: 57, disagree: 31, unsure: 12 }, tags: ['노동', '경제'] },
-  { id: 'nuclear-expansion', participantCount: 8902, distribution: { agree: 44, disagree: 41, unsure: 15 }, tags: ['에너지', '환경'] },
-  { id: 'retirement-65', participantCount: 6317, distribution: { agree: 52, disagree: 29, unsure: 19 }, tags: ['노동', '복지'] },
-  { id: 'ai-regulation', participantCount: 5140, distribution: { agree: 38, disagree: 49, unsure: 13 }, tags: ['기술', '산업'] },
-  { id: 'property-tax', participantCount: 4760, distribution: { agree: 41, disagree: 46, unsure: 13 }, tags: ['부동산', '경제'] },
+  { slug: 'work-week-4-5', participantCount: 12481, distribution: { agree: 57, disagree: 31, unsure: 12 }, tags: ['노동', '경제'] },
+  { slug: 'nuclear-expansion', participantCount: 8902, distribution: { agree: 44, disagree: 41, unsure: 15 }, tags: ['에너지', '환경'] },
+  { slug: 'retirement-65', participantCount: 6317, distribution: { agree: 52, disagree: 29, unsure: 19 }, tags: ['노동', '복지'] },
+  { slug: 'ai-regulation', participantCount: 5140, distribution: { agree: 38, disagree: 49, unsure: 13 }, tags: ['기술', '산업'] },
+  { slug: 'property-tax', participantCount: 4760, distribution: { agree: 41, disagree: 46, unsure: 13 }, tags: ['부동산', '경제'] },
 ];
 
 const claimsOf = (issue: Issue, side: ClaimSide) =>
   issue.claims.filter((claim) => claim.side === side);
 
-describe('IssueRepository', () => {
+describe('MockIssueRepository', () => {
   it('이슈 5건을 반환하고 주 4.5일제가 첫 번째다', () => {
     expect(issues).toHaveLength(5);
-    expect(issues[0].id).toBe('work-week-4-5');
+    expect(issues[0].slug).toBe('work-week-4-5');
   });
 
-  it('브리프의 이슈 id·참여자 수·분포·태그를 그대로 사용한다', () => {
+  it('목 데이터는 slug 와 id 가 같다', () => {
+    issues.forEach((issue) => {
+      expect(issue.slug).toBe(issue.id);
+    });
+  });
+
+  it('listSlugs 는 이슈 순서대로 slug 를 반환한다', async () => {
+    expect(await repository.listSlugs()).toEqual(issues.map((issue) => issue.slug));
+  });
+
+  it('listClaimParams 는 모든 이슈의 (slug, 주장 id) 조합을 돌려준다', async () => {
+    const params = await repository.listClaimParams();
+    const claimCount = issues.reduce((sum, issue) => sum + issue.claims.length, 0);
+
+    expect(params).toHaveLength(claimCount);
+    expect(params[0]).toEqual({ slug: issues[0].slug, claimId: issues[0].claims[0].id });
+    params.forEach((param) => {
+      expect(issues.some((issue) => issue.slug === param.slug)).toBe(true);
+    });
+  });
+
+  it('브리프의 이슈 slug·참여자 수·분포·태그를 그대로 사용한다', () => {
     EXPECTED_ISSUES.forEach((expected, index) => {
       const issue = issues[index];
 
-      expect(issue.id).toBe(expected.id);
+      expect(issue.slug).toBe(expected.slug);
       expect(issue.participantCount).toBe(expected.participantCount);
       expect(issue.distribution).toEqual(expected.distribution);
       expect(issue.tags).toEqual(expected.tags);
     });
   });
 
-  it('id로 이슈를 조회하고, 없는 id는 undefined를 반환한다', () => {
-    expect(getIssueById('work-week-4-5')?.id).toBe('work-week-4-5');
-    expect(getIssueById('nuclear-expansion')?.id).toBe('nuclear-expansion');
-    expect(getIssueById('not-exists')).toBeUndefined();
+  it('slug로 이슈를 조회하고, 없는 slug는 null을 반환한다', async () => {
+    expect((await repository.getIssueBySlug('work-week-4-5'))?.slug).toBe('work-week-4-5');
+    expect((await repository.getIssueBySlug('nuclear-expansion'))?.slug).toBe('nuclear-expansion');
+    expect(await repository.getIssueBySlug('not-exists')).toBeNull();
   });
 
-  it('이슈 id는 중복되지 않는다', () => {
-    const ids = new Set(issues.map((issue) => issue.id));
+  it('이슈 slug는 중복되지 않는다', () => {
+    const slugs = new Set(issues.map((issue) => issue.slug));
 
-    expect(ids.size).toBe(issues.length);
+    expect(slugs.size).toBe(issues.length);
   });
 
   it('모든 질문은 물음표로 끝난다', () => {
@@ -178,12 +200,12 @@ describe('IssueRepository', () => {
     });
   });
 
-  it('getClaimById로 주장을 조회하고, 없는 조합은 undefined를 반환한다', () => {
+  it('getClaimById로 주장을 조회하고, 없는 조합은 null을 반환한다', async () => {
     const issue = issues[0];
     const claim = issue.claims[0];
 
-    expect(getClaimById(issue.id, claim.id)?.title).toBe(claim.title);
-    expect(getClaimById(issue.id, 'not-exists')).toBeUndefined();
-    expect(getClaimById('not-exists', claim.id)).toBeUndefined();
+    expect((await repository.getClaimById(issue.slug, claim.id))?.title).toBe(claim.title);
+    expect(await repository.getClaimById(issue.slug, 'not-exists')).toBeNull();
+    expect(await repository.getClaimById('not-exists', claim.id)).toBeNull();
   });
 });

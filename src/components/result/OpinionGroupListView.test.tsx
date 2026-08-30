@@ -3,10 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
 import { OpinionGroupListView } from '@/components/result/OpinionGroupListView';
-import { getIssues } from '@/data/IssueRepository';
+import { MOCK_ISSUES } from '@/data/MockIssueRepository';
 import { toIssueResultSummary } from '@/domain/IssueResultSummary';
 
-const issue = toIssueResultSummary(getIssues()[0]);
+const issue = toIssueResultSummary(MOCK_ISSUES[0]);
 
 const renderView = () =>
   render(<OpinionGroupListView groups={issue.opinionGroups} claims={issue.claims} />);

@@ -17,7 +17,15 @@ npm run lint         # eslint
 npm run typecheck    # tsc --noEmit
 npm test             # vitest run
 npm run build
+
+docker compose up -d # 로컬 Postgres (postgres:16, 5432)
+npm run db:generate  # prisma generate
+npm run db:migrate   # prisma migrate deploy
+npm run db:seed      # 목 이슈 5건 + 검색 키워드 + 매체 테이블 시드
+                     # 데모 분포까지 넣으려면 npm run db:seed -- --with-demo-votes
 ```
+
+`DATABASE_URL`이 없으면 앱은 목 데이터로 동작한다(폴백). lint·typecheck·test·build는 DB 없이 통과해야 한다.
 
 ## 프로젝트 컨벤션 (글로벌 컨벤션에 추가)
 
@@ -30,5 +38,7 @@ npm run build
 - 찬성/반대 UI는 항상 동일한 컴포넌트·동일한 크기로 렌더링한다 (Equal weight).
 - 진영 연상 색(빨강/파랑) 금지. 찬성 `--color-agree`, 반대 `--color-disagree`, 모름 `--color-unsure`만 사용.
 - 아이콘은 인라인 SVG 컴포넌트(`src/components/common/icons/`), 이모지 금지.
-- 목 데이터는 `src/data/`에만 두고 `IssueRepository`를 통해서만 접근한다. Repository 호출은 서버 컴포넌트(`page.tsx`)에서만 하고, 클라이언트에는 필요한 값만 props로 넘긴다.
+- 목 데이터는 `src/data/`에만 두고 리포지토리를 통해서만 접근한다. Repository 호출은 서버 컴포넌트(`page.tsx`)에서만 하고, 클라이언트에는 필요한 값만 props로 넘긴다.
+- 리포지토리는 **비동기 인터페이스**(`IssueRepository`)로 선언하고, 구현은 `Mock*`(목 데이터) / `Prisma*`(DB) 두 벌을 둔다. 호출부는 `getIssueRepository()`로만 구현을 고른다.
+- 이슈의 URL 식별자는 `slug`다. 라우트 파라미터 이름은 `[issueId]`지만 값은 slug이며, 링크·투표 기록 키도 slug를 쓴다.
 - 테스트 파일은 대상 파일 옆에 `*.test.ts(x)`로 둔다.

@@ -1,0 +1,22 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.question {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--color-muted);
+}
