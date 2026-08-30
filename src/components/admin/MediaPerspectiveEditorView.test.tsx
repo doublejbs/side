@@ -13,6 +13,8 @@ const createPerspective = (leaning: MediaLeaning): MediaPerspective => ({
   representativeArticle: { title: '대표 기사', source: '예시일보', url: 'https://example.com/a' },
 });
 
+const EMPTY_NOTICE = /성향이 지정된 매체의 기사가 없어 언론 관점이 생성되지 않았습니다\./;
+
 const readHiddenValues = (container: HTMLElement, suffix: string): string[] =>
   Array.from(container.querySelectorAll<HTMLInputElement>(`input[name$="${suffix}"]`)).map(
     (input) => input.value,
@@ -26,6 +28,7 @@ describe('MediaPerspectiveEditorView', () => {
           createPerspective(MediaLeaning.CENTRIST),
           createPerspective(MediaLeaning.CONSERVATIVE),
         ]}
+        isExtracted
       />,
     );
 
@@ -44,6 +47,7 @@ describe('MediaPerspectiveEditorView', () => {
           createPerspective(MediaLeaning.CONSERVATIVE),
           createPerspective(MediaLeaning.PROGRESSIVE),
         ]}
+        isExtracted
       />,
     );
 
@@ -54,5 +58,32 @@ describe('MediaPerspectiveEditorView', () => {
       '',
       `${MediaLeaning.CONSERVATIVE} 프레임`,
     ]);
+  });
+
+  it('추출이 끝났는데 관점이 하나도 없으면 성향 지정 안내를 보여준다', () => {
+    render(<MediaPerspectiveEditorView mediaPerspectives={[]} isExtracted />);
+
+    expect(screen.getByText(EMPTY_NOTICE)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '/admin/publishers' })).toHaveAttribute(
+      'href',
+      '/admin/publishers',
+    );
+  });
+
+  it('추출 전에는 관점이 비어 있어도 안내를 보여주지 않는다', () => {
+    render(<MediaPerspectiveEditorView mediaPerspectives={[]} isExtracted={false} />);
+
+    expect(screen.queryByText(EMPTY_NOTICE)).not.toBeInTheDocument();
+  });
+
+  it('관점이 하나라도 있으면 안내를 보여주지 않는다', () => {
+    render(
+      <MediaPerspectiveEditorView
+        mediaPerspectives={[createPerspective(MediaLeaning.CENTRIST)]}
+        isExtracted
+      />,
+    );
+
+    expect(screen.queryByText(EMPTY_NOTICE)).not.toBeInTheDocument();
   });
 });

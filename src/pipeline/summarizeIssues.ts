@@ -15,6 +15,7 @@ import {
   toPromptArticle,
   type PipelineArticle,
 } from '@/pipeline/selectPromptArticles';
+import { stripCitationMarkers } from '@/pipeline/stripCitationMarkers';
 import {
   SUMMARIZE_SCHEMA_NAME,
   summarizeSchema,
@@ -124,8 +125,8 @@ const toKeyPoints = (
 ): { id: string; title: string; question: string }[] =>
   keyPoints.map((keyPoint, index) => ({
     id: `${issueId}-kp-${index + 1}`,
-    title: keyPoint.title,
-    question: keyPoint.question,
+    title: stripCitationMarkers(keyPoint.title),
+    question: stripCitationMarkers(keyPoint.question),
   }));
 
 /** 기존 검수 메모를 지우지 않고 새 줄을 덧붙인다. 이미 같은 줄이 있으면 그대로 둔다. */
@@ -193,9 +194,10 @@ export const applySummaryDraft = async (
   await tx.issue.update({
     where: { id: issue.id },
     data: {
-      question: draft.question,
+      question: stripCitationMarkers(draft.question),
       tags: draft.tags,
-      summary: draft.summary,
+      // 프롬프트로 금지해도 모델이 `[0]` 같은 인용 번호를 넣는 경우가 있어 저장 직전에 걷어낸다.
+      summary: draft.summary.map((sentence) => stripCitationMarkers(sentence)),
       keyPoints: toKeyPoints(issue.id, draft.keyPoints),
       summarizedAt: now,
       summarizedArticleCount: articleCount,

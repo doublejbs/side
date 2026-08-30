@@ -12,6 +12,7 @@ import { VotePanelContainer } from '@/components/issue/VotePanelContainer';
 import { getIssueRepository } from '@/data/getIssueRepository';
 import { ClaimSide } from '@/domain/ClaimSide';
 import type { Claim } from '@/domain/Issue';
+import { decodeSlugParam } from '@/server/decodeRouteParam';
 import { isServerVoteEnabled } from '@/server/isServerVoteEnabled';
 
 import styles from './page.module.css';
@@ -40,7 +41,7 @@ export const generateStaticParams = async (): Promise<{ issueId: string }[]> => 
 
 export const generateMetadata = async ({ params }: Props): Promise<Metadata> => {
   const { issueId } = await params;
-  const issue = await getIssueRepository().getIssueBySlug(issueId);
+  const issue = await getIssueRepository().getIssueBySlug(decodeSlugParam(issueId));
 
   if (!issue) {
     return { title: '이슈를 찾을 수 없어요 · SIDE' };
@@ -51,7 +52,7 @@ export const generateMetadata = async ({ params }: Props): Promise<Metadata> => 
 
 const IssueDetailPage = async ({ params }: Props) => {
   const { issueId } = await params;
-  const issue = await getIssueRepository().getIssueBySlug(issueId);
+  const issue = await getIssueRepository().getIssueBySlug(decodeSlugParam(issueId));
 
   if (!issue) {
     notFound();

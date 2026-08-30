@@ -15,10 +15,14 @@ interface Props {
   featured?: boolean;
 }
 
+/** 투표가 하나도 없을 때 분포 대신 보여줄 안내 문구. */
+const EMPTY_DISTRIBUTION_MESSAGE = '아직 의견이 없어요 · 첫 의견을 남겨보세요';
+
 const formatParticipantCount = (count: number): string => `${count.toLocaleString('ko-KR')}명`;
 
 export const IssueCardView = ({ issue, featured = false }: Props) => {
   const participantLabel = formatParticipantCount(issue.participantCount);
+  const isEmpty = issue.participantCount === 0;
 
   const tags = (
     <div className={styles.tags}>
@@ -36,7 +40,7 @@ export const IssueCardView = ({ issue, featured = false }: Props) => {
         ) : (
           <div className={styles.topRow}>
             {tags}
-            <span className={styles.participantCompact}>{participantLabel}</span>
+            {isEmpty ? null : <span className={styles.participantCompact}>{participantLabel}</span>}
           </div>
         )}
 
@@ -44,16 +48,22 @@ export const IssueCardView = ({ issue, featured = false }: Props) => {
           {issue.question}
         </h2>
 
-        <div className={styles.distribution}>
-          <DistributionBarView distribution={issue.distribution} height={featured ? 10 : 8} />
-          <DistributionLegendView distribution={issue.distribution} colored={featured} />
-        </div>
+        {isEmpty ? (
+          <p className={styles.emptyMessage}>{EMPTY_DISTRIBUTION_MESSAGE}</p>
+        ) : (
+          <div className={styles.distribution}>
+            <DistributionBarView distribution={issue.distribution} height={featured ? 10 : 8} />
+            <DistributionLegendView distribution={issue.distribution} colored={featured} />
+          </div>
+        )}
 
         {featured ? (
           <div className={styles.footer}>
-            <span className={styles.participantFeatured}>
-              <b className={styles.participantValue}>{participantLabel}</b> 참여
-            </span>
+            {isEmpty ? null : (
+              <span className={styles.participantFeatured}>
+                <b className={styles.participantValue}>{participantLabel}</b> 참여
+              </span>
+            )}
             <ArrowLinkView className={styles.cta}>3분 만에 이해하기</ArrowLinkView>
           </div>
         ) : null}

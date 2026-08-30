@@ -82,7 +82,10 @@ export const IssueReviewFormView = ({
       deleteEvidenceAction={deleteEvidenceAction}
     />
 
-    <MediaPerspectiveEditorView mediaPerspectives={issue.mediaPerspectives} />
+    <MediaPerspectiveEditorView
+      mediaPerspectives={issue.mediaPerspectives}
+      isExtracted={issue.claims.length > 0}
+    />
 
     <AdminSectionView title="공통 내용" description="성향과 관계없이 모든 매체가 함께 다룬 사실.">
       <AdminTextAreaFieldView

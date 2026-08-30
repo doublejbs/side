@@ -1,3 +1,8 @@
+.emptyNotice {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

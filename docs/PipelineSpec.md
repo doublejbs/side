@@ -256,6 +256,12 @@ CLI: `npm run pipeline -- [collect|cluster|classify|summarize|extract|verify|lin
   - 분류(classify)는 그대로 두고 요약 → 추출 → 검증 → 연결만 다시 실행한다. 근거 id 는 주장을 저장한 뒤에야 정해지므로 검증은 저장 트랜잭션 뒤에 이어서 돈다.
   - `reviewNote`는 지우지 않고 `[재생성 YYYY-MM-DD]` 줄을 덧붙인다.
   - 서버 액션은 Prisma를 직접 참조하지 않고 `src/server/getPipelineDeps.ts` 경계(prisma + textClient, 없으면 `null`)를 통해 호출한다. `AdminStore`는 이 책임을 갖지 않는다.
+- **승인 시 slug 생성 규칙**(`src/server/slugify.ts`):
+  - slug 는 **ASCII(영문 소문자·숫자·하이픈)로만** 만든다. 한글 slug 는 링크를 공유하거나 다른 시스템에 붙여 넣을 때 퍼센트 인코딩돼 읽기 어렵고 라우팅에서도 어긋나기 쉽다.
+  - 질문을 소문자로 바꾼 뒤 `[0-9a-z\s-]` 외 문자(한글 포함)를 버리고, 공백·연속 하이픈을 `-` 하나로 모으고, 앞뒤 하이픈을 떼고 60자로 자른다. 예: `CPTPP 가입을 추진해야 할까?` → `cptpp`, `AI 규제, 지금 필요한가?! (2026)` → `ai-2026`.
+  - 남는 글자가 2자 미만이면(한글만으로 이루어진 질문, `주 4일제를 도입해야 할까?` 처럼 숫자 한 자만 남는 질문) `issue-<yyyymmdd>-<6자 해시>` 폴백을 쓴다. 날짜는 UTC 기준, 해시는 질문의 FNV-1a 32비트 값을 36진수로 적은 것이라 같은 질문이면 항상 같다. 예: `정년을 연장해야 할까?` → `issue-20260830-1a2b3c`.
+  - 중복이면 `resolveUniqueSlug` 가 `-2`, `-3` … 을 붙인다(최대 100).
+  - 이 규칙 이전에 만들어진 한글 slug 도 계속 열려야 하므로, 페이지·API 는 라우트 파라미터를 `decodeSlugParam`(`src/server/decodeRouteParam.ts`)으로 디코드한 뒤 조회한다.
 - `/admin/queries`: 수집 키워드 추가/비활성화.
 - `/admin/publishers`: 매체 도메인 → 매체명 · 성향 테이블 편집(파일 대신 DB 테이블 `Publisher`로 승격: `domain @unique, name, leaning?`). `publisherDirectory.ts`는 초기 시드.
 - 관리자 UI는 앱과 같은 토큰을 쓰되 데스크톱 폭(`max-width: 960px`) 허용. 컴포넌트는 `src/components/admin/`.

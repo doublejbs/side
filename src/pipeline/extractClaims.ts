@@ -30,6 +30,7 @@ import {
   toPromptArticle,
 } from '@/pipeline/selectPromptArticles';
 import { DEFAULT_DEBATE_THRESHOLD, DEFAULT_EXPOSE_LIMIT } from '@/pipeline/PipelineEnv';
+import { stripCitationMarkers } from '@/pipeline/stripCitationMarkers';
 import {
   appendNoteLine,
   DEFAULT_MAX_ARTICLES,
@@ -330,8 +331,9 @@ export const generateClaimsDraft = async ({
     return {
       side: toPrismaClaimSide(draft.side),
       order,
-      title: draft.title,
-      description: draft.description,
+      // 근거의 `articleIndex` 는 그대로 두고, 독자에게 보이는 문장에서만 인용 번호를 지운다.
+      title: stripCitationMarkers(draft.title),
+      description: stripCitationMarkers(draft.description),
       evidences: built.evidences,
     };
   });

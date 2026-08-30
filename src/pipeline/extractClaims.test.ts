@@ -78,6 +78,19 @@ const EXTRACT_RESPONSE = {
 
 const createTextClient = () => createFakeTextClient({ [EXTRACT_SCHEMA_NAME]: [EXTRACT_RESPONSE] });
 
+/** 모델이 주장 문장에 기사 인덱스 인용 표기를 남긴 응답. */
+const CITED_EXTRACT_RESPONSE = {
+  ...EXTRACT_RESPONSE,
+  claims: EXTRACT_RESPONSE.claims.map((claim) => ({
+    ...claim,
+    title: `${claim.title} [0]`,
+    description: `${claim.description}[1, 2]`,
+  })),
+};
+
+const createCitedTextClient = () =>
+  createFakeTextClient({ [EXTRACT_SCHEMA_NAME]: [CITED_EXTRACT_RESPONSE] });
+
 const seed = (): Partial<FakeDatabase> => ({
   issues: [createClassifiedIssueRow({ id: 'issue-1', question: '주 4.5일제를 도입해야 할까?' })],
   articles: [
@@ -123,6 +136,19 @@ describe('extractClaims', () => {
     expect(db.claims).toHaveLength(6);
     expect(db.claims.filter((claim) => claim.side === 'AGREE').map((claim) => claim.order)).toEqual([0, 1, 2]);
     expect(db.claims.filter((claim) => claim.side === 'DISAGREE').map((claim) => claim.order)).toEqual([0, 1, 2]);
+  });
+
+  it('주장 제목·설명에서 인용 번호를 지우고 저장한다', async () => {
+    const { db, prisma } = createFakePrismaClient(seed());
+
+    await extractClaims({ prisma, textClient: createCitedTextClient() });
+
+    db.claims.forEach((claim) => {
+      expect(claim.title).not.toMatch(/\[\d/);
+      expect(claim.description).not.toMatch(/\[\d/);
+    });
+    expect(db.claims[0].title).toBe('AGREE 주장 1');
+    expect(db.claims[0].description).toBe('기사에서 확인된 설명이다. 두 번째 문장이다.');
   });
 
   it('근거를 기사 행으로 치환한다', async () => {

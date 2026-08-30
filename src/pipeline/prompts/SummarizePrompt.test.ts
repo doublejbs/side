@@ -59,6 +59,10 @@ describe('buildSummarizeSystemPrompt', () => {
     expect(prompt).toContain('노사 협상·사건 경과라면 그 안의 제도 쟁점');
   });
 
+  it('요약·질문·쟁점에 인용 번호를 넣지 말라고 못 박는다', () => {
+    expect(prompt).toContain('`[0]` 같은 인용 번호나 출처 표기를 넣지 않는다');
+  });
+
   it('입력에 없는 사실과 URL 창작을 금지한다', () => {
     expect(prompt).toContain('URL·매체명·날짜·수치를 창작하지 않는다');
   });

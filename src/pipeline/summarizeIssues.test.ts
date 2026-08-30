@@ -34,6 +34,22 @@ const SUMMARY_RESPONSE = {
 
 const createTextClient = () => createFakeTextClient({ [SUMMARIZE_SCHEMA_NAME]: [SUMMARY_RESPONSE] });
 
+/** 모델이 기사 인덱스 인용 표기를 그대로 남긴 응답. */
+const CITED_SUMMARY_RESPONSE = {
+  question: '주 4.5일제[0]를 도입해야 할까?',
+  tags: ['노동', '경제'],
+  summary: ['법안이 발의됐다 [0].', '정부가 [1] 검토 중이다.', '노사 입장이 갈린다 [2, 3].'],
+  keyPoints: [
+    { title: '생산성 [0]', question: '생산성은 유지될까? [1]' },
+    { title: '임금', question: '임금은 그대로일까?' },
+    { title: '업종', question: '모든 업종에 적용될까?' },
+    { title: '해외', question: '해외 사례는 어떨까?' },
+  ],
+};
+
+const createCitedTextClient = () =>
+  createFakeTextClient({ [SUMMARIZE_SCHEMA_NAME]: [CITED_SUMMARY_RESPONSE] });
+
 /** 응답 큐가 비어 있어 항상 실패하는 텍스트 클라이언트. */
 const createFailingTextClient = () => createFakeTextClient({});
 
@@ -107,6 +123,31 @@ describe('summarizeIssues', () => {
     expect(db.issues[0].question).toBe('주 4.5일제를 도입해야 할까?');
     expect(db.issues[0].tags).toEqual(['노동', '경제']);
     expect(db.issues[0].summary).toHaveLength(3);
+    expect(db.issues[0].keyPoints).toEqual([
+      { id: 'issue-1-kp-1', title: '생산성', question: '생산성은 유지될까?' },
+      { id: 'issue-1-kp-2', title: '임금', question: '임금은 그대로일까?' },
+      { id: 'issue-1-kp-3', title: '업종', question: '모든 업종에 적용될까?' },
+      { id: 'issue-1-kp-4', title: '해외', question: '해외 사례는 어떨까?' },
+    ]);
+  });
+
+  it('모델이 남긴 인용 번호를 지우고 저장한다', async () => {
+    const { db, prisma } = createFakePrismaClient({
+      issues: [createClassifiedIssueRow({ id: 'issue-1' })],
+      articles: [
+        createFakeArticleRow({ id: 'a1', issueId: 'issue-1' }),
+        createFakeArticleRow({ id: 'a2', issueId: 'issue-1' }),
+      ],
+    });
+
+    await summarizeIssues({ prisma, textClient: createCitedTextClient() });
+
+    expect(db.issues[0].question).toBe('주 4.5일제를 도입해야 할까?');
+    expect(db.issues[0].summary).toEqual([
+      '법안이 발의됐다.',
+      '정부가 검토 중이다.',
+      '노사 입장이 갈린다.',
+    ]);
     expect(db.issues[0].keyPoints).toEqual([
       { id: 'issue-1-kp-1', title: '생산성', question: '생산성은 유지될까?' },
       { id: 'issue-1-kp-2', title: '임금', question: '임금은 그대로일까?' },

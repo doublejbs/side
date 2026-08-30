@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 
+import { decodeSlugParam } from '@/server/decodeRouteParam';
 import { getServerVoteContext } from '@/server/isServerVoteEnabled';
 import { toRouteResponse } from '@/server/routeResponse';
 import { handleGetMyVote, serverVoteDisabledResponse } from '@/server/voteHandlers';
@@ -19,5 +20,7 @@ export const GET = async (request: Request, { params }: Context): Promise<Respon
   const { slug } = await params;
   const cookieStore = await cookies();
 
-  return toRouteResponse(await handleGetMyVote({ ...context, cookieStore, slug }));
+  return toRouteResponse(
+    await handleGetMyVote({ ...context, cookieStore, slug: decodeSlugParam(slug) }),
+  );
 };

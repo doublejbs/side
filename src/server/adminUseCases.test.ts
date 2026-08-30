@@ -262,12 +262,23 @@ describe('saveClaim', () => {
 });
 
 describe('publishIssue', () => {
-  it('질문에서 slug 를 만들어 승인한다', async () => {
+  it('질문의 영문·숫자로 slug 를 만들어 승인한다', async () => {
+    const store = new InMemoryAdminStore({
+      issues: [createIssue({ question: 'CPTPP 가입을 추진해야 할까?' })],
+    });
+
+    const slug = await publishIssue(store, 'issue-1');
+
+    expect(slug).toBe('cptpp');
+    expect((await store.getIssue('issue-1'))?.status).toBe(IssueStatus.PUBLISHED);
+  });
+
+  it('한글만 있는 질문은 날짜·해시 폴백 slug 로 승인한다', async () => {
     const store = new InMemoryAdminStore({ issues: [createIssue()] });
 
     const slug = await publishIssue(store, 'issue-1');
 
-    expect(slug).toBe('정년을-연장해야-할까');
+    expect(slug).toMatch(/^issue-\d{8}-[0-9a-z]{6}$/);
     expect((await store.getIssue('issue-1'))?.status).toBe(IssueStatus.PUBLISHED);
   });
 
@@ -276,14 +287,14 @@ describe('publishIssue', () => {
       issues: [
         createIssue({
           id: 'issue-0',
-          slug: '정년을-연장해야-할까',
+          slug: 'cptpp',
           status: IssueStatus.PUBLISHED,
         }),
-        createIssue(),
+        createIssue({ question: 'CPTPP 가입을 추진해야 할까?' }),
       ],
     });
 
-    expect(await publishIssue(store, 'issue-1')).toBe('정년을-연장해야-할까-2');
+    expect(await publishIssue(store, 'issue-1')).toBe('cptpp-2');
   });
 
   it('검수 대기가 아닌 이슈는 승인하지 않는다', async () => {
