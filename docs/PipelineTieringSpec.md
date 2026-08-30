@@ -140,3 +140,22 @@ interface EvidenceVerdict { evidenceId: string; support: EvidenceSupport; type: 
 - summarize 재생성 후 질문은 전부 찬반형으로 바뀌었다(예: "CPTPP 가입을 추진해야 할까?"). verify는 10이슈에서 미지지 근거 6~7건을 표시했다.
 - **후속**: 시드(목 데이터) 이슈는 `centroid`가 비어 있어 cluster 단계에서 배정 대상이 되지 못하고, 같은 주제의 실뉴스가 별도 이슈("주 4.5일제를 도입해야 할까?" 중복)로 생성된다. 시드·승인 시 연결 기사 임베딩 평균으로 `centroid`를 채우거나, classify의 중복 판단에 임베딩 유사도를 보조 신호로 넣는다.
 - **후속**: 관리자 화면에 "중복 이슈 병합"(기사·주장을 대상 이슈로 이동) 액션.
+
+## 11. 후속 구현 스펙 (centroid · 병합 · 배치)
+
+### 11.1 승인/시드 시 centroid 계산
+- `Issue.centroid`가 비어 있으면 cluster 단계가 그 이슈를 배정 대상으로 보지 않아, 시드 이슈·재생성 이슈에 같은 주제 실뉴스가 붙지 못하고 별도 이슈가 생긴다.
+- 규칙: **연결 기사 중 임베딩이 있는 것들의 평균**(`meanVector`)을 centroid로 저장한다. 계산 시점 ① 관리자 승인(`publishIssue`) ② 병합(11.2) ③ cluster 단계 종료 시 centroid가 빈 DRAFT/REVIEW/PUBLISHED 이슈 일괄 보정(임베딩 있는 기사 ≥1). 임베딩 있는 기사가 0이면 그대로 둔다.
+- 순수 함수 `src/pipeline/computeCentroid.ts` — `computeCentroid(embeddings: number[][]): number[]`(빈 입력 → `[]`, 차원 불일치 항목 제외). `AdminStore.recomputeCentroid(issueId)`.
+
+### 11.2 중복 이슈 병합 (관리자)
+- 대상: 검수 화면에서 `classification.duplicateOfIssueId`가 있거나 관리자가 직접 대상 이슈를 고른 경우. 액션 **"이 이슈를 ○○○에 병합"**(대상 선택 `<select>`: 최근 30일 REVIEW/PUBLISHED/DRAFT 이슈, 중복 제안 대상이 기본값).
+- 동작(트랜잭션): 원본 이슈의 `Article.issueId`를 대상으로 이동 → 원본 `Claim`(근거·피드백 cascade)은 삭제하지 않고 원본에 남긴다 → 원본 `status = REJECTED`, `reviewNote`에 `[병합됨 → {대상 question}]`, 대상 `reviewNote`에 `[병합 수신 ← {원본 question}, 기사 N건]` → 대상 centroid 재계산 → 대상이 PUBLISHED면 `summarizedArticleCount` 대비 증가로 다음 실행에서 재요약 후보가 되게 둔다(자동 재요약은 하지 않음).
+- 금지: 대상 = 자기 자신, 대상이 REJECTED/AUTO_REJECTED, 원본이 PUBLISHED(발행 이슈는 먼저 반려해야 병합 가능 — 사용자 투표 보존).
+- `AdminStore.mergeIssue(sourceId, targetId)`, use case `mergeIssue(store, sourceId, targetId)` 검증 규칙, 서버 액션 `mergeIssueAction`, 성공 시 대상 이슈 검수 화면으로 redirect + `AdminMessage.MERGED`.
+
+### 11.3 근거 배치 insert
+- `applyClaimsDraft`: 주장 6개는 `create`(id 필요), 근거는 주장별 `tx.evidence.createMany`(왕복 25회 → 12회). 결과 동일.
+
+### 11.4 테스트
+- `computeCentroid`(평균·빈·차원 불일치), `publishIssue` 후 centroid 저장, cluster 종료 시 보정, `mergeIssue`(이동·상태·메모·centroid·금지 규칙 5종), 액션 리다이렉트, `createMany` 호출 단언.
