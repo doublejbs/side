@@ -108,7 +108,9 @@ vercel env add DATABASE_URL
    - 쿼리 파라미터: `?connection_limit=5` (Prisma 연결 풀 제한)
 
 #
-> **Vercel 런타임 `DATABASE_URL`은 Transaction pooler(6543)를 쓴다.** 서버리스 함수는 동시 인스턴스가 많아 세션 풀러(클라이언트 15개 한도)를 금방 소진한다. 형식: `postgresql://postgres.<ref>:<pw>@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1`. 마이그레이션(`prisma migrate deploy`)은 GitHub Actions가 세션 풀러(5432) URL로 수행하므로 Vercel에서는 실행하지 않는다 — 즉 **GitHub 시크릿과 Vercel 환경변수의 `DATABASE_URL`은 서로 다른 포트**다.
+> **Vercel 런타임 `DATABASE_URL`은 Transaction pooler(6543)를 쓴다.** 서버리스 함수는 동시 인스턴스가 많아 세션 풀러(클라이언트 15개 한도)를 금방 소진한다. 형식: `postgresql://postgres.<ref>:<pw>@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=5&pool_timeout=20`. 마이그레이션(`prisma migrate deploy`)은 GitHub Actions가 세션 풀러(5432) URL로 수행하므로 Vercel에서는 실행하지 않는다 — 즉 **GitHub 시크릿과 Vercel 환경변수의 `DATABASE_URL`은 서로 다른 포트**다.
+
+> `connection_limit=1`로 배포하면 `next build` 프리렌더 중 한 요청의 병렬 쿼리가 풀을 기다리다 `P2024`(pool timeout)로 빌드가 실패한다(2026-08-30 실제 발생). Transaction pooler는 클라이언트 연결을 넉넉히 받으므로 `connection_limit=5&pool_timeout=20`을 쓴다.
 
 ## 3. 데이터베이스 마이그레이션 및 시드 (로컬에서)
 

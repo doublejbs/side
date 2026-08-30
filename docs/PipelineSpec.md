@@ -282,8 +282,8 @@ Repository `Settings` → `Secrets and variables` → `Variables`에서 설정�
 2. **Connection String 확인**
    - 프로젝트 `Settings` → `Database` → `Connection pooler` (또는 direct)
    - Pooler 권장 이유: Prisma와의 연결 풀링 효율성
-   - URL 예: `postgresql://postgres.[프로젝트]:[암호]@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1`
-   - 추천 쿼리 파라미터: `?pgbouncer=true&connection_limit=1` (Prisma 공식 문서 기준, PgBouncer 연결 제한)
+   - URL 예: `postgresql://postgres.[프로젝트]:[암호]@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=5&pool_timeout=20`
+   - 추천 쿼리 파라미터: `?pgbouncer=true&connection_limit=5&pool_timeout=20` (Prisma 공식 문서 기준, PgBouncer 연결 제한)
 
 3. **DATABASE_URL 시크릿 등록**
    ```bash
