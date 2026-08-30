@@ -28,6 +28,11 @@ export const MediaPerspectiveView = ({
   mediaOutletCount,
   coveragePeriodLabel,
 }: Props) => {
+  // 언론 관점이 없으면 섹션을 렌더하지 않는다
+  if (perspectives.length === 0) {
+    return null;
+  }
+
   /** 이슈 상세 상단의 "원문 기사"(핵심 출처)와 달리 성향 비교를 위해 수집한 기사 전체 수다. */
   const analyzedArticleCount = perspectives.reduce(
     (sum, perspective) => sum + perspective.articleCount,
