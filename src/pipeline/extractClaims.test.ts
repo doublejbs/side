@@ -7,6 +7,7 @@ import { MediaLeaning } from '@/domain/MediaLeaning';
 import { extractClaims } from '@/pipeline/extractClaims';
 import { EXTRACT_SCHEMA_NAME } from '@/pipeline/ExtractSchema';
 import {
+  countCalls,
   createFakeArticleRow,
   createFakeIssueRow,
   createFakePrismaClient,
@@ -218,7 +219,7 @@ describe('extractClaims', () => {
     });
   });
 
-  it('LLM 이 실패하면 기존 주장을 남기고 실패한 id 를 돌려준다', async () => {
+  it('LLM 이 실패하면 기존 주장을 남기고 실패 원인을 돌려준다', async () => {
     const base = seed();
     const { db, prisma } = createFakePrismaClient({
       ...base,
@@ -233,7 +234,11 @@ describe('extractClaims', () => {
       issueId: 'issue-1',
     });
 
-    expect(result).toEqual({ extracted: 0, skipped: 0, failed: ['issue-1'] });
+    expect(result.extracted).toBe(0);
+    expect(result.skipped).toBe(0);
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0].issueId).toBe('issue-1');
+    expect(result.failed[0].message).toContain('Error');
     expect(db.claims.map((claim) => claim.id)).toEqual(['claim-old']);
   });
 
@@ -516,5 +521,17 @@ describe('extractClaims 중복 보류', () => {
 
     expect(result.extracted).toBe(1);
     expect(db.claims.every((claim) => claim.issueId === 'issue-dup')).toBe(true);
+  });
+
+  it('트랜잭션 타임아웃 옵션을 전달한다', async () => {
+    const { calls, prisma } = createFakePrismaClient(seed());
+
+    await extractClaims({ prisma, textClient: createTextClient() });
+
+    const txCallCount = countCalls(calls, '$transaction', 'call');
+    expect(txCallCount).toBe(1);
+    // FakePrismaClient가 옵션을 기록한다
+    const txCall = calls.find((call) => call.model === '$transaction' && call.method === 'call');
+    expect(txCall?.args).toHaveProperty('options');
   });
 });

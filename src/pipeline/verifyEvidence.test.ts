@@ -195,12 +195,16 @@ describe('verifyEvidence', () => {
     expect(textClient.requests).toHaveLength(0);
   });
 
-  it('한 이슈가 실패해도 실패한 id 를 남기고 검증 시각을 쓰지 않는다', async () => {
+  it('한 이슈가 실패해도 실패 원인을 남기고 검증 시각을 쓰지 않는다', async () => {
     const { db, prisma } = createFakePrismaClient(seed());
 
     const result = await verifyEvidence({ prisma, textClient: createFailingTextClient(), now: NOW });
 
-    expect(result).toEqual({ verified: 0, flagged: 0, failed: ['issue-1'] });
+    expect(result.verified).toBe(0);
+    expect(result.flagged).toBe(0);
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0].issueId).toBe('issue-1');
+    expect(result.failed[0].message).toContain('Error');
     expect(db.issues[0].verifiedAt).toBeNull();
   });
 

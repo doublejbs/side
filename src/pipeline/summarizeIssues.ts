@@ -2,6 +2,8 @@ import { IssueStatus, type Prisma, type PrismaClient } from '@prisma/client';
 
 import { issueClassificationSchema } from '@/data/IssueJsonSchemas';
 import { ARTICLE_SELECT } from '@/pipeline/articleSelect';
+import type { PipelineFailure } from '@/pipeline/PipelineFailure';
+import { toPipelineFailure } from '@/pipeline/PipelineFailure';
 import {
   collectDuplicateOfIssueIds,
   duplicateHoldNote,
@@ -44,8 +46,8 @@ interface SummarizeIssuesDeps {
 export interface SummarizeIssuesResult {
   summarized: number;
   skipped: number;
-  /** LLM 호출·저장이 실패한 이슈 id. 나머지 이슈는 계속 처리한다. */
-  failed: string[];
+  /** LLM 호출·저장이 실패한 이슈. 나머지 이슈는 계속 처리한다. */
+  failed: PipelineFailure[];
 }
 
 /** 프롬프트에 넣는 기사 수 상한. */
@@ -263,7 +265,7 @@ export const summarizeIssues = async ({
 
   let summarized = 0;
   let skipped = 0;
-  const failed: string[] = [];
+  const failed: PipelineFailure[] = [];
 
   for (const issue of targets) {
     const forced = issueId !== undefined;
@@ -295,8 +297,10 @@ export const summarizeIssues = async ({
       await applySummaryDraft(prisma, { issue, draft, articleCount });
 
       summarized += 1;
-    } catch {
-      failed.push(issue.id);
+    } catch (error) {
+      const failure = toPipelineFailure(issue.id, error);
+      failed.push(failure);
+      console.error(`[summarize] 이슈 ${issue.id} 실패: ${failure.message}`);
     }
   }
 

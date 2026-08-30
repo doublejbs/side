@@ -72,7 +72,11 @@ describe('classifyIssues', () => {
 
     const result = await classifyIssues({ prisma, nanoTextClient: createNanoClient(), now: NOW });
 
-    expect(result).toEqual({ classified: 1, passed: 1, autoRejected: 0, duplicates: 0, failed: [] });
+    expect(result.classified).toBe(1);
+    expect(result.passed).toBe(1);
+    expect(result.autoRejected).toBe(0);
+    expect(result.duplicates).toBe(0);
+    expect(result.failed).toEqual([]);
     expect(db.issues[0].status).toBe(IssueStatus.DRAFT);
     expect(db.issues[0].debateScore).toBe(82);
     expect(db.issues[0].topic).toBe('노동');
@@ -209,7 +213,7 @@ describe('classifyIssues', () => {
     expect(result.classified).toBe(0);
   });
 
-  it('한 이슈가 실패해도 나머지는 계속 분류하고 실패한 id 를 남긴다', async () => {
+  it('한 이슈가 실패해도 나머지는 계속 분류하고 실패 원인을 남긴다', async () => {
     const { db, prisma } = createFakePrismaClient(seed());
 
     const result = await classifyIssues({
@@ -218,13 +222,13 @@ describe('classifyIssues', () => {
       now: NOW,
     });
 
-    expect(result).toEqual({
-      classified: 0,
-      passed: 0,
-      autoRejected: 0,
-      duplicates: 0,
-      failed: ['issue-1'],
-    });
+    expect(result.classified).toBe(0);
+    expect(result.passed).toBe(0);
+    expect(result.autoRejected).toBe(0);
+    expect(result.duplicates).toBe(0);
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0].issueId).toBe('issue-1');
+    expect(result.failed[0].message).toContain('Error');
     expect(db.issues[0].debateScore).toBeNull();
     expect(db.issues[0].status).toBe(IssueStatus.DRAFT);
   });
