@@ -2,6 +2,7 @@ import { LoginErrorView } from '@/components/auth/LoginErrorView';
 import { OAuthLoginContainer } from '@/components/auth/OAuthLoginContainer';
 import { CardElement } from '@/components/common/CardElement';
 import { CardView } from '@/components/common/CardView';
+import { LegalConsentNoticeView } from '@/components/legal/LegalConsentNoticeView';
 
 import styles from './LoginPageView.module.css';
 
@@ -32,6 +33,8 @@ export const LoginPageView = ({ next, hasError = false, isAuthEnabled }: Props) 
           <p className={styles.disabled}>로그인이 설정되지 않았습니다</p>
         </>
       )}
+
+      <LegalConsentNoticeView />
     </CardView>
   </main>
 );
