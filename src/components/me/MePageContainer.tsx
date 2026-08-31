@@ -30,6 +30,14 @@ interface Props {
 }
 
 /**
+ * 히어로 안내. 아직 집계를 모르는 동안(로딩 중)에는 0 을 비추지 않도록 문구를 붙이지 않는다.
+ */
+const buildHeroDescription = (patternIssueCount: number | null): string | undefined =>
+  patternIssueCount === null
+    ? undefined
+    : `${patternIssueCount}개 이슈에서 내가 선택한 패턴이에요. 성향 라벨이 아니라 기록입니다.`;
+
+/**
  * `/me` 본문. 세션을 **클라이언트에서** 읽어 페이지가 정적 렌더로 남게 한다
  * (서버에서 세션을 읽으면 ISR 과 승인 `revalidatePath` 가 무력화된다).
  * 근거: docs/AuthSpec.md 4.4.
@@ -74,7 +82,7 @@ export const MePageContainer = ({
     <>
       <PageHeroView
         title="나의 정치 관점"
-        description={`${state.patternIssueCount}개 이슈에서 내가 선택한 패턴이에요. 성향 라벨이 아니라 기록입니다.`}
+        description={buildHeroDescription(state.patternIssueCount)}
       />
 
       <div className={styles.content}>
@@ -89,7 +97,11 @@ export const MePageContainer = ({
           <div className={styles.placeholder} aria-busy="true" />
         ) : (
           <>
-            <PerspectiveAxesView points={state.points} noticeText={state.axesNoticeText} />
+            <PerspectiveAxesView
+              points={state.points}
+              noticeText={state.axesNoticeText}
+              errorText={state.axesErrorText}
+            />
 
             <section className={styles.section}>
               <SectionTitleView>내 생각이 바뀐 이슈</SectionTitleView>
@@ -97,7 +109,7 @@ export const MePageContainer = ({
                 <OpinionChangeEmptyView />
               ) : (
                 state.changes.map((change) => (
-                  <OpinionChangeView key={change.slug} change={change} />
+                  <OpinionChangeView key={`${change.slug}-${change.afterAt}`} change={change} />
                 ))
               )}
             </section>

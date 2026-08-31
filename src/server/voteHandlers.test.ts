@@ -358,6 +358,9 @@ describe('serverVoteDisabledResponse', () => {
 const OTHER_SLUG = 'nuclear-expansion';
 const OTHER_ISSUE_ID = 'issue-2';
 const OTHER_CLAIM_ID = 'claim-2';
+/** 축이 둘 붙은 이슈. 표 한 장이 두 축에 각각 반영되는지 본다. */
+const TWO_AXES_SLUG = 'property-tax';
+const TWO_AXES_ISSUE_ID = 'issue-3';
 
 /** 관점 응답을 단언하기 좋게 축을 이름으로 찾는다. */
 const findPoint = (body: MyPerspectiveResponse, axis: PerspectiveAxis) => {
@@ -375,7 +378,11 @@ describe('handleMyPerspective', () => {
 
   beforeEach(() => {
     perspectiveStore = new InMemoryVoteStore({
-      issues: { [SLUG]: ISSUE_ID, [OTHER_SLUG]: OTHER_ISSUE_ID },
+      issues: {
+        [SLUG]: ISSUE_ID,
+        [OTHER_SLUG]: OTHER_ISSUE_ID,
+        [TWO_AXES_SLUG]: TWO_AXES_ISSUE_ID,
+      },
       issueDetails: {
         [SLUG]: {
           question: '주 4.5일제를 도입해야 할까?',
@@ -384,6 +391,13 @@ describe('handleMyPerspective', () => {
         [OTHER_SLUG]: {
           question: '원전 비중을 확대해야 할까?',
           axes: [{ axis: PerspectiveAxis.ENVIRONMENT, agreeDirection: AxisDirection.LEFT }],
+        },
+        [TWO_AXES_SLUG]: {
+          question: '보유세를 올려야 할까?',
+          axes: [
+            { axis: PerspectiveAxis.ECONOMY, agreeDirection: AxisDirection.RIGHT },
+            { axis: PerspectiveAxis.WELFARE, agreeDirection: AxisDirection.RIGHT },
+          ],
         },
       },
       claims: [
@@ -421,6 +435,38 @@ describe('handleMyPerspective', () => {
     expect(findPoint(body, PerspectiveAxis.LABOR)).toMatchObject({ value: 100, voteCount: 1 });
     expect(findPoint(body, PerspectiveAxis.ENVIRONMENT)).toMatchObject({ value: 0, voteCount: 1 });
     expect(findPoint(body, PerspectiveAxis.ECONOMY).value).toBeNull();
+  });
+
+  it('축이 둘인 이슈의 표는 두 축 모두에 반영한다', async () => {
+    await perspectiveStore.castVote(TWO_AXES_ISSUE_ID, USER.id, VoteChoice.AGREE);
+
+    const body = (await handleMyPerspective({ store: perspectiveStore, sessionUser: USER }))
+      .body as MyPerspectiveResponse;
+
+    expect(findPoint(body, PerspectiveAxis.ECONOMY)).toMatchObject({ value: 100, voteCount: 1 });
+    expect(findPoint(body, PerspectiveAxis.WELFARE)).toMatchObject({ value: 100, voteCount: 1 });
+    // 표 한 장이 두 축에 각각 세어진다(화면 안내가 "이슈" 가 아니라 "투표" 인 이유다).
+    expect(body.points.reduce((total, point) => total + point.voteCount, 0)).toBe(2);
+  });
+
+  it('축이 둘인 이슈에 반대하면 두 축 모두 반대 방향이다', async () => {
+    await perspectiveStore.castVote(TWO_AXES_ISSUE_ID, USER.id, VoteChoice.DISAGREE);
+
+    const body = (await handleMyPerspective({ store: perspectiveStore, sessionUser: USER }))
+      .body as MyPerspectiveResponse;
+
+    expect(findPoint(body, PerspectiveAxis.ECONOMY)).toMatchObject({ value: 0, voteCount: 1 });
+    expect(findPoint(body, PerspectiveAxis.WELFARE)).toMatchObject({ value: 0, voteCount: 1 });
+  });
+
+  it('첫 투표만 있으면 변화가 없다', async () => {
+    await perspectiveStore.castVote(ISSUE_ID, USER.id, VoteChoice.AGREE);
+    await perspectiveStore.castVote(OTHER_ISSUE_ID, USER.id, VoteChoice.DISAGREE);
+
+    const body = (await handleMyPerspective({ store: perspectiveStore, sessionUser: USER }))
+      .body as MyPerspectiveResponse;
+
+    expect(body.changes).toEqual([]);
   });
 
   it('같은 이슈에서 선택이 바뀐 쌍만 변화로 만든다', async () => {

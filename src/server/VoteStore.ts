@@ -39,6 +39,12 @@ export interface MyVoteAxesRow {
   choice: VoteChoice;
 }
 
+/**
+ * `listMyVoteEvents` 가 한 번에 읽는 이력 수 상한.
+ * 화면은 최근 변화 몇 건만 쓰므로(`MAX_OPINION_CHANGES`) 오래 쓴 계정의 이력을 전부 읽지 않는다.
+ */
+export const MAX_MY_VOTE_EVENTS = 200;
+
 /** `claimAnonRecords` 가 계정으로 옮긴 레코드 수. 삭제된 충돌 레코드는 세지 않는다. */
 export interface ClaimedAnonRecordCounts {
   votes: number;
@@ -69,7 +75,8 @@ export interface VoteStore {
    */
   listMyVotes(userId: string): Promise<MyVoteRow[]>;
   /**
-   * 한 사용자의 투표 이력 전체. 발행된 이슈만, 오래된 순(`createdAt` 오름차순)이다.
+   * 한 사용자의 투표 이력. 발행된 이슈만, 오래된 순(`createdAt` 오름차순)이다.
+   * 최근 `MAX_MY_VOTE_EVENTS` 건까지만 읽고 그 안에서 오름차순으로 돌려준다.
    * "나" 탭의 의견 변화가 같은 이슈의 연속 이벤트를 짝지어 쓴다.
    * 근거: docs/PerspectiveSpec.md 4장.
    */

@@ -6,7 +6,7 @@ import {
   type VoteChoice as PrismaVoteChoice,
 } from '@prisma/client';
 
-import { issueAxesSchema } from '@/data/IssueJsonSchemas';
+import { parseIssueAxes } from '@/data/IssueJsonSchemas';
 import {
   toDomainClaimFeedback,
   toDomainVoteChoice,
@@ -15,16 +15,16 @@ import {
 } from '@/data/PrismaEnumMappers';
 import type { VoteCounts } from '@/data/voteAggregation';
 import type { ClaimFeedback } from '@/domain/ClaimFeedback';
-import type { IssueAxis } from '@/domain/IssueAxis';
 import type { VoteChoice } from '@/domain/VoteChoice';
 import { getVoteChoiceKey } from '@/domain/voteChoiceKey';
-import type {
-  ClaimedAnonRecordCounts,
-  MyPersuadedClaimRow,
-  MyVoteAxesRow,
-  MyVoteEventRow,
-  MyVoteRow,
-  VoteStore,
+import {
+  MAX_MY_VOTE_EVENTS,
+  type ClaimedAnonRecordCounts,
+  type MyPersuadedClaimRow,
+  type MyVoteAxesRow,
+  type MyVoteEventRow,
+  type MyVoteRow,
+  type VoteStore,
 } from '@/server/VoteStore';
 
 /** 유니크 제약 위반(Prisma). 같은 사용자의 첫 투표가 동시에 들어오면 upsert 가 이 오류로 실패한다. */
@@ -35,13 +35,6 @@ const isUniqueConstraintError = (error: unknown): boolean =>
   error !== null &&
   'code' in error &&
   (error as { code: unknown }).code === UNIQUE_CONSTRAINT_ERROR_CODE;
-
-/** Json 컬럼이 깨져 있어도 계산이 멈추지 않도록 빈 축으로 떨어뜨린다. */
-const parseIssueAxes = (value: unknown): IssueAxis[] => {
-  const parsed = issueAxesSchema.safeParse(value);
-
-  return parsed.success ? parsed.data : [];
-};
 
 /** 익명 레코드를 계정으로 옮길 때 쓰는 분류 결과. */
 interface AnonRecordSplit<Row> {
@@ -184,10 +177,12 @@ export class PrismaVoteStore implements VoteStore {
         createdAt: true,
         issue: { select: { slug: true, question: true } },
       },
-      orderBy: { createdAt: 'asc' },
+      // 최근 이력부터 상한만큼 읽고, 짝짓기는 오래된 순이 편하므로 뒤집어 돌려준다.
+      orderBy: { createdAt: 'desc' },
+      take: MAX_MY_VOTE_EVENTS,
     });
 
-    return rows.map((row) => ({
+    return rows.reverse().map((row) => ({
       issueId: row.issueId,
       issueSlug: row.issue.slug,
       question: row.issue.question,

@@ -6,8 +6,10 @@ import styles from './PerspectiveAxesView.module.css';
 
 interface Props {
   points: PerspectivePoint[];
-  /** 카드 상단 안내. 서버 계산일 때만 "내 투표 N개 기준" 을 넘긴다. */
+  /** 카드 상단 안내. 서버 계산일 때만 "축에 반영된 투표 N개 기준" 을 넘긴다. */
   noticeText?: string;
+  /** 서버 계산을 불러오지 못했을 때의 안내. 목 값을 대신 비추지 않고 이 문구만 보여준다. */
+  errorText?: string;
 }
 
 /** 표가 하나도 없어 값을 계산할 수 없는 축에 붙이는 안내. */
@@ -23,8 +25,13 @@ const getAxisLabel = (point: PerspectivePoint): string => {
   return `${between} 100 중 ${point.value}`;
 };
 
-export const PerspectiveAxesView = ({ points, noticeText }: Props) => (
+export const PerspectiveAxesView = ({ points, noticeText, errorText }: Props) => (
   <CardView>
+    {errorText ? (
+      <p className={styles.error} role="status">
+        {errorText}
+      </p>
+    ) : null}
     {noticeText ? <p className={styles.notice}>{noticeText}</p> : null}
     <ul className={styles.axes}>
       {points.map((point) => (

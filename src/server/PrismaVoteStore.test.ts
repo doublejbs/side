@@ -6,6 +6,7 @@ import { ClaimFeedback } from '@/domain/ClaimFeedback';
 import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
 import { VoteChoice } from '@/domain/VoteChoice';
 import { PrismaVoteStore } from '@/server/PrismaVoteStore';
+import { MAX_MY_VOTE_EVENTS } from '@/server/VoteStore';
 
 /**
  * `PrismaVoteStore` 가 실제로 보내는 질의만 흉내 내는 인메모리 대역.
@@ -312,10 +313,13 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
       },
       findMany: async ({
         where,
+        orderBy,
+        take,
       }: {
         where: { userId: string; issue?: { status: string } };
         select?: unknown;
         orderBy?: { createdAt: 'asc' | 'desc' };
+        take?: number;
       }) => {
         const rows = db.voteEvents.filter((event) => {
           const issue = db.issues.find((row) => row.id === event.issueId);
@@ -325,9 +329,13 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
             (!where.issue || issue?.status === where.issue.status)
           );
         });
+        const direction = orderBy?.createdAt === 'desc' ? -1 : 1;
 
         return [...rows]
-          .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+          .sort(
+            (left, right) => direction * (left.createdAt.getTime() - right.createdAt.getTime()),
+          )
+          .slice(0, take ?? rows.length)
           .map((event) => {
             const issue = db.issues.find((row) => row.id === event.issueId);
 
@@ -741,6 +749,22 @@ describe('PrismaVoteStore 투표 이력·관점', () => {
         createdAt: expect.any(String),
       },
     ]);
+    expect(Date.parse(rows[0].createdAt)).toBeLessThan(Date.parse(rows[1].createdAt));
+  });
+
+  it('이력이 많으면 최근 상한만큼만 읽고 오래된 순으로 돌려준다', async () => {
+    const choices = [VoteChoice.AGREE, VoteChoice.DISAGREE];
+
+    for (let index = 0; index < MAX_MY_VOTE_EVENTS + 10; index += 1) {
+      await store.castVote('issue-1', 'user-1', choices[index % choices.length]);
+    }
+
+    const rows = await store.listMyVoteEvents('user-1');
+    const all = fake.db.voteEvents;
+
+    expect(rows).toHaveLength(MAX_MY_VOTE_EVENTS);
+    expect(rows[0].createdAt).toBe(all[all.length - MAX_MY_VOTE_EVENTS].createdAt.toISOString());
+    expect(rows[rows.length - 1].createdAt).toBe(all[all.length - 1].createdAt.toISOString());
     expect(Date.parse(rows[0].createdAt)).toBeLessThan(Date.parse(rows[1].createdAt));
   });
 

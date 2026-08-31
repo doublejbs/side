@@ -69,13 +69,22 @@ describe('PerspectiveAxesView', () => {
   it('안내 문구를 넘기지 않으면 카드 상단에 아무것도 붙이지 않는다', () => {
     render(<PerspectiveAxesView points={PERSPECTIVE_POINTS} />);
 
-    expect(screen.queryByText(/내 투표/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/축에 반영된 투표/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('안내 문구를 넘기면 카드 상단에 보여준다', () => {
-    render(<PerspectiveAxesView points={PERSPECTIVE_POINTS} noticeText="내 투표 7개 기준" />);
+    render(
+      <PerspectiveAxesView points={PERSPECTIVE_POINTS} noticeText="축에 반영된 투표 7개 기준" />,
+    );
 
-    expect(screen.getByText('내 투표 7개 기준')).toBeInTheDocument();
+    expect(screen.getByText('축에 반영된 투표 7개 기준')).toBeInTheDocument();
+  });
+
+  it('실패 안내를 넘기면 카드 상단에 보여준다', () => {
+    render(<PerspectiveAxesView points={PERSPECTIVE_POINTS} errorText="불러오지 못했어요" />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('불러오지 못했어요');
   });
 });
 

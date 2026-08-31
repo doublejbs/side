@@ -13,6 +13,7 @@
   ```
 - 축 정의(고정, `src/domain/perspectiveAxisLabels.ts`): 경제(시장 중심|정부 역할), 복지(개인 책임|사회 책임), 노동(기업 중심|노동자 중심), 환경(성장|환경), 외교(현실주의|이상주의). LEFT=왼쪽 라벨.
 - 생성: `classify`(nano) 출력에 `axes` 추가 — "이 질문에 찬성하는 것이 어느 축의 어느 방향인지, 해당 없으면 빈 배열. 확신 없으면 넣지 않는다." zod: 축 중복 금지.
+  - 검수 화면은 `IssueClassificationCardView` 에 모델이 제안한 축을 읽기 전용으로 보여준다(축 이름 · 찬성 방향 라벨, 없으면 생략).
   - 구현: `ClassifySchema.axes`(길이 ≤ `MAX_ISSUE_AXES`, 축 중복 refine) · `ClassifyPrompt.PERSPECTIVE_AXIS_DEFINITIONS`(축 코드와 좌우 라벨을 그대로 제시) · `classifyIssues.applyClassification`(`Issue.axes` 에 저장하고 분류 Json 에도 함께 남김) · `DryRunClients` 는 축을 지어내지 않도록 빈 배열.
 - 검수: 관리자 검수 폼에 축 편집(축 select + 방향 select, 최대 2행). 승인 전 확인 대상.
   - 구현: `IssueAxesEditorContainer`(선택 상태) → `IssueAxesEditorView` → `IssueAxisRowView`. 필드 이름은 `axis-{index}-axis` · `axis-{index}-direction`(`issueAxisFields.ts`), 방향 선택지 라벨은 고른 축의 실제 좌우 라벨을 따라간다. `AdminActions.parseIssueForm` 이 읽어 `saveIssue` 로 저장하고, 미지정·중복 축 정리는 `saveIssue` 가 맡는다.
@@ -22,6 +23,7 @@
 
 - `VoteEvent` 테이블(마이그레이션 0005): `id, issueId, userId, choice, createdAt`. `@@index([userId, issueId, createdAt])`.
 - `PrismaVoteStore.castVote`: upsert 후 **선택이 바뀌었거나 신규일 때만** `voteEvent.create`(같은 선택 재클릭은 기록 안 함). InMemory 동일. 익명 이전(`claimAnonRecords`) 시 이벤트는 만들지 않음(과거 이력 없음).
+- 읽기 상한: `listMyVoteEvents` 는 `createdAt` 내림차순으로 최근 `MAX_MY_VOTE_EVENTS`(200)건만 읽고 오름차순으로 뒤집어 돌려준다(InMemory 동일). 이 질의를 위해 `@@index([userId, createdAt])`(마이그레이션 0006).
 - 정리 정책 없음(MVP).
 
 ## 3. 계산 (`src/domain/computePerspective.ts`, 순수 함수)
@@ -48,10 +50,11 @@ interface MyOpinionChange { slug: string; question: string; before: VoteChoice; 
 ## 5. 나 탭 화면
 
 - 서버 모드 + 로그인: `useMyPerspective`(MyVotesCache 패턴, 투표·피드백 성공 시 무효화 — `invalidateMyVotes`와 함께 `invalidateMyPerspective` 호출)로 로드.
-  - 축 카드: `value === null`인 축은 마커 없이 트랙만 + "아직 이 분야 투표가 없어요" 12px muted. 카드 상단 안내 문구 유지 + "내 투표 N개 기준".
+  - 축 카드: `value === null`인 축은 마커 없이 트랙만 + "아직 이 분야 투표가 없어요" 12px muted. 카드 상단 안내 문구 유지 + "축에 반영된 투표 N개 기준"(N = `points[].voteCount` 합. UNSURE·축 없는 표는 빠지고, 축이 둘인 이슈는 두 번 세어지므로 라벨을 "투표"로 적어 값과 맞춘다).
   - "내 생각이 바뀐 이슈": `changes`가 있으면 실제 데이터(질문·before→after·시점·설득 주장), 없으면 "생각이 바뀐 기록이 아직 없어요" 카드. 목 `OPINION_CHANGES`는 서버 모드에서 사용 안 함.
   - 참여 타일: 투표한 이슈(기존 `useMyVotes`), **근거 피드백**(`feedbackCount` — 기존 "읽은 근거 42" 대체, 라벨 변경), 바뀐 생각(`changes.length`).
-- 비로그인·목 모드: 기존 동작(목 데이터) 유지.
+- 조회 실패(서버 오류·네트워크): 목 데이터로 되돌아가지 않는다. 서버 모드 + 로그인이면 빈 축 5개(값 없음)와 빈 변화에 "불러오지 못했어요. 잠시 후 다시 시도해 주세요" 안내만 붙인다. 캐시는 재시도할 수 있도록 요청 표시를 되돌린다.
+- 비로그인·목 모드: 기존 동작(목 데이터) 유지. 목 의견 변화는 목 모드에서만 조회한다(`/me` 페이지가 `isServerVoteEnabled()` 로 가른다).
 - 발견 탭은 이번 범위 밖.
 - 구현: `PerspectiveCache` + `useMyPerspective(isServerEnabled)`(MyVotesCache 패턴 — 401 세션 무효화, 실패 시 재시도·기존 값 보존, 요청 순번). `VoteApiClient` 는 투표·근거 피드백 성공 시 `invalidateMyVotes` 와 함께 `invalidateMyPerspective` 를 부른다. 화면 조립은 `useMePageState`(서버 계산이 오기 전에는 목 값을 비추지 않는다) → `MePageContainer`, 빈 변화는 `OpinionChangeEmptyView`, 값이 null 인 축은 `PerspectiveAxesView` 가 마커 없이 그린다.
 

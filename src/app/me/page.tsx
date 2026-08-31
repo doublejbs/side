@@ -58,7 +58,9 @@ const buildMockOpinionChanges = async (): Promise<MyOpinionChange[]> => {
 };
 
 const MePage = async () => {
-  const opinionChanges = await buildMockOpinionChanges();
+  const isServerEnabled = isServerVoteEnabled();
+  // 서버 모드에서는 실제 계산이 변화 목록을 채우므로 목 데이터를 읽지 않는다.
+  const opinionChanges = isServerEnabled ? [] : await buildMockOpinionChanges();
   const loginHref = buildLoginHref('/me');
 
   return (
@@ -70,7 +72,7 @@ const MePage = async () => {
         patternIssueCount={PARTICIPATION_SUMMARY.patternIssueCount}
         feedbackCount={PARTICIPATION_SUMMARY.readEvidenceCount}
         loginHref={loginHref}
-        isServerEnabled={isServerVoteEnabled()}
+        isServerEnabled={isServerEnabled}
       />
     </main>
   );

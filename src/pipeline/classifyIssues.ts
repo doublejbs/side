@@ -1,5 +1,6 @@
 import { IssueStatus, type Prisma, type PrismaClient } from '@prisma/client';
 
+import { toPrismaJson } from '@/data/toPrismaJson';
 import type { IssueAxis } from '@/domain/IssueAxis';
 import type { IssueClassification } from '@/domain/IssueClassification';
 import { ARTICLE_SELECT } from '@/pipeline/articleSelect';
@@ -231,10 +232,8 @@ export const applyClassification = async (
       debateScore: result.debateScore,
       topic: result.topic,
       // 축은 `Issue.axes` 가 정본이다. 분류 Json 에도 같이 남겨 모델이 무엇을 제안했는지 보존한다.
-      // @ts-expect-error Prisma's JSON type doesn't accept typed arrays
-      classification: toClassification(result, duplicate, axes),
-      // @ts-expect-error Prisma's JSON type doesn't accept typed arrays
-      axes,
+      classification: toPrismaJson(toClassification(result, duplicate, axes)),
+      axes: toPrismaJson(axes),
       classifiedAt: now,
       reviewNote,
       ...(passed ? {} : { status: IssueStatus.AUTO_REJECTED }),

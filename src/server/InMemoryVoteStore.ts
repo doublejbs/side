@@ -3,13 +3,14 @@ import { ClaimFeedback } from '@/domain/ClaimFeedback';
 import type { IssueAxis } from '@/domain/IssueAxis';
 import { VoteChoice } from '@/domain/VoteChoice';
 import { getVoteChoiceKey } from '@/domain/voteChoiceKey';
-import type {
-  ClaimedAnonRecordCounts,
-  MyPersuadedClaimRow,
-  MyVoteAxesRow,
-  MyVoteEventRow,
-  MyVoteRow,
-  VoteStore,
+import {
+  MAX_MY_VOTE_EVENTS,
+  type ClaimedAnonRecordCounts,
+  type MyPersuadedClaimRow,
+  type MyVoteAxesRow,
+  type MyVoteEventRow,
+  type MyVoteRow,
+  type VoteStore,
 } from '@/server/VoteStore';
 
 /** 관점·의견 변화 테스트가 필요로 하는 이슈 메타데이터. slug 로 찾는다. */
@@ -166,20 +167,23 @@ export class InMemoryVoteStore implements VoteStore {
   async listMyVoteEvents(userId: string): Promise<MyVoteEventRow[]> {
     const slugByIssueId = this.buildSlugByIssueId();
 
-    return this.voteEvents
+    const recent = this.voteEvents
       .filter((event) => event.userId === userId && slugByIssueId.has(event.issueId))
       .sort((left, right) => left.seq - right.seq)
-      .map((event) => {
-        const issueSlug = slugByIssueId.get(event.issueId) ?? null;
+      // 최근 이력부터 상한만큼만 남긴다(Prisma 구현과 같은 규칙).
+      .slice(-MAX_MY_VOTE_EVENTS);
 
-        return {
-          issueId: event.issueId,
-          issueSlug,
-          question: issueSlug === null ? null : this.getQuestion(issueSlug),
-          choice: event.choice,
-          createdAt: event.createdAt,
-        };
-      });
+    return recent.map((event) => {
+      const issueSlug = slugByIssueId.get(event.issueId) ?? null;
+
+      return {
+        issueId: event.issueId,
+        issueSlug,
+        question: issueSlug === null ? null : this.getQuestion(issueSlug),
+        choice: event.choice,
+        createdAt: event.createdAt,
+      };
+    });
   }
 
   async listMyPersuadedClaims(userId: string): Promise<MyPersuadedClaimRow[]> {

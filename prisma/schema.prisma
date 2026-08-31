@@ -209,6 +209,8 @@ model VoteEvent {
   createdAt DateTime   @default(now())
 
   @@index([userId, issueId, createdAt])
+  /// 내 이력을 최근 순으로 상한만큼 읽는 질의(listMyVoteEvents)의 인덱스.
+  @@index([userId, createdAt])
 }
 
 model ClaimFeedbackRecord {

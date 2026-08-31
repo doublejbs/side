@@ -58,3 +58,14 @@
   line-height: 1.5;
   color: var(--color-muted);
 }
+
+/* 서버 계산을 불러오지 못했을 때의 안내. 안내 문구와 같은 자리를 쓴다. */
+.error {
+  margin-bottom: 18px;
+  padding: 8px 12px;
+  border-radius: var(--radius-control);
+  background: var(--color-disagree-tint);
+  color: var(--color-disagree);
+  font-size: 12px;
+  line-height: 1.5;
+}

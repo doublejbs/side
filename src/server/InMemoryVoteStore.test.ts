@@ -5,6 +5,7 @@ import { ClaimFeedback } from '@/domain/ClaimFeedback';
 import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
 import { VoteChoice } from '@/domain/VoteChoice';
 import { InMemoryVoteStore } from '@/server/InMemoryVoteStore';
+import { MAX_MY_VOTE_EVENTS } from '@/server/VoteStore';
 
 const SLUG = 'work-week-4-5';
 const ISSUE_ID = 'issue-1';
@@ -279,6 +280,21 @@ describe('InMemoryVoteStore 투표 이력·관점', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0].choice).toBe(VoteChoice.UNSURE);
+  });
+
+  it('이력이 많으면 최근 상한만큼만 오래된 순으로 돌려준다', async () => {
+    const choices = [VoteChoice.AGREE, VoteChoice.DISAGREE];
+
+    for (let index = 0; index < MAX_MY_VOTE_EVENTS + 10; index += 1) {
+      await eventStore.castVote(ISSUE_ID, 'user-1', choices[index % choices.length]);
+    }
+
+    const rows = await eventStore.listMyVoteEvents('user-1');
+
+    expect(rows).toHaveLength(MAX_MY_VOTE_EVENTS);
+    // 마지막(가장 최근) 이력이 남아야 최근 변화를 잃지 않는다.
+    expect(rows[rows.length - 1].choice).toBe(choices[(MAX_MY_VOTE_EVENTS + 9) % 2]);
+    expect(Date.parse(rows[0].createdAt)).toBeLessThan(Date.parse(rows[1].createdAt));
   });
 
   it('익명 표를 계정으로 옮길 때는 이력을 만들지 않는다', async () => {

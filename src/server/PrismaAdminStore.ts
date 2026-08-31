@@ -1,11 +1,11 @@
 import { IssueStatus as PrismaIssueStatus, Prisma, type PrismaClient } from '@prisma/client';
 
 import {
-  issueAxesSchema,
   issueClassificationSchema,
   keyPointsSchema,
   mediaPerspectivesSchema,
   opinionGroupsSchema,
+  parseIssueAxes,
 } from '@/data/IssueJsonSchemas';
 import {
   toDomainClaimSide,
@@ -17,9 +17,9 @@ import {
   toPrismaIssueStatus,
   toPrismaMediaLeaning,
 } from '@/data/PrismaEnumMappers';
+import { toPrismaJson } from '@/data/toPrismaJson';
 import type { EvidenceSupport } from '@/domain/EvidenceSupport';
 import type { KeyPoint, MediaPerspective, OpinionGroup } from '@/domain/Issue';
-import type { IssueAxis } from '@/domain/IssueAxis';
 import type { IssueClassification } from '@/domain/IssueClassification';
 import { IssueStatus } from '@/domain/IssueStatus';
 import { computeCentroid } from '@/pipeline/computeCentroid';
@@ -54,12 +54,6 @@ const parseKeyPoints = (value: unknown): KeyPoint[] => {
   return parsed.success ? parsed.data : [];
 };
 
-const parseIssueAxes = (value: unknown): IssueAxis[] => {
-  const parsed = issueAxesSchema.safeParse(value);
-
-  return parsed.success ? parsed.data : [];
-};
-
 const parseMediaPerspectives = (value: unknown): MediaPerspective[] => {
   const parsed = mediaPerspectivesSchema.safeParse(value);
 
@@ -82,8 +76,6 @@ const parseClassification = (value: unknown): IssueClassification | null => {
 /** 아직 검증되지 않은 근거는 `support` 가 비어 있다. */
 const parseEvidenceSupport = (value: string | null): EvidenceSupport | null =>
   value === null ? null : toDomainEvidenceSupport(value);
-
-const toJson = (value: unknown): Prisma.InputJsonValue => value as Prisma.InputJsonValue;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -123,14 +115,14 @@ const ARTICLE_TAKE = 200;
 const toIssueUpdateData = (patch: AdminIssuePatch): Prisma.IssueUpdateInput => ({
   ...(patch.question === undefined ? {} : { question: patch.question }),
   ...(patch.tags === undefined ? {} : { tags: patch.tags }),
-  ...(patch.axes === undefined ? {} : { axes: toJson(patch.axes) }),
+  ...(patch.axes === undefined ? {} : { axes: toPrismaJson(patch.axes) }),
   ...(patch.summary === undefined ? {} : { summary: patch.summary }),
-  ...(patch.keyPoints === undefined ? {} : { keyPoints: toJson(patch.keyPoints) }),
+  ...(patch.keyPoints === undefined ? {} : { keyPoints: toPrismaJson(patch.keyPoints) }),
   ...(patch.commonCoverage === undefined ? {} : { commonCoverage: patch.commonCoverage }),
   ...(patch.mediaPerspectives === undefined
     ? {}
-    : { mediaPerspectives: toJson(patch.mediaPerspectives) }),
-  ...(patch.opinionGroups === undefined ? {} : { opinionGroups: toJson(patch.opinionGroups) }),
+    : { mediaPerspectives: toPrismaJson(patch.mediaPerspectives) }),
+  ...(patch.opinionGroups === undefined ? {} : { opinionGroups: toPrismaJson(patch.opinionGroups) }),
 });
 
 /** Prisma 로 관리자 검수 데이터를 읽고 쓴다. */

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MePageContainer } from '@/components/me/MePageContainer';
 import { EMPTY_AXIS_NOTICE } from '@/components/me/PerspectiveAxesView';
+import { PERSPECTIVE_ERROR_TEXT } from '@/components/me/useMePageState';
 import type { MyOpinionChange, MyPerspectiveResponse } from '@/domain/MyPerspective';
 import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
 import type { SessionUser } from '@/domain/SessionUser';
@@ -58,7 +59,7 @@ const SERVER_PERSPECTIVE: MyPerspectiveResponse = {
       leftLabel: '시장 중심',
       rightLabel: '정부 역할',
       value: 75,
-      voteCount: 2,
+      voteCount: 3,
     },
     {
       axis: PerspectiveAxis.WELFARE,
@@ -98,7 +99,7 @@ describe('MePageContainer 목 모드', () => {
     expect(screen.getByText(/18개 이슈에서 내가 선택한 패턴이에요/)).toBeInTheDocument();
     expect(screen.getByText('원전을 늘려야 할까?')).toBeInTheDocument();
     expect(screen.getByText('42')).toBeInTheDocument();
-    expect(screen.queryByText(/내 투표/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/축에 반영된 투표/)).not.toBeInTheDocument();
   });
 });
 
@@ -124,11 +125,34 @@ describe('MePageContainer 서버 계산', () => {
     expect(screen.getByText(EMPTY_AXIS_NOTICE)).toBeInTheDocument();
   });
 
-  it('내 투표 수를 기준으로 안내한다', () => {
+  it('축에 반영된 표 수로 안내하고 히어로는 투표한 이슈 수를 쓴다', () => {
     renderPage(true);
 
-    expect(screen.getByText('내 투표 2개 기준')).toBeInTheDocument();
+    expect(screen.getByText('축에 반영된 투표 3개 기준')).toBeInTheDocument();
     expect(screen.getByText(/2개 이슈에서 내가 선택한 패턴이에요/)).toBeInTheDocument();
+  });
+
+  it('같은 이슈에서 두 번 바뀐 기록도 각각 보여준다', () => {
+    useMyPerspectiveMock.mockReturnValue({
+      perspective: {
+        ...SERVER_PERSPECTIVE,
+        changes: [
+          MOCK_CHANGE,
+          {
+            ...MOCK_CHANGE,
+            before: VoteChoice.AGREE,
+            beforeAt: '2026-03-02T09:30:00.000Z',
+            after: VoteChoice.DISAGREE,
+            afterAt: '2026-04-19T11:05:00.000Z',
+          },
+        ],
+      },
+      isLoaded: true,
+    });
+
+    renderPage(true);
+
+    expect(screen.getAllByText('원전을 늘려야 할까?')).toHaveLength(2);
   });
 
   it('바뀐 기록이 없으면 안내 카드를 보여준다', () => {
@@ -160,6 +184,45 @@ describe('MePageContainer 서버 계산', () => {
 
     expect(screen.queryByRole('meter')).not.toBeInTheDocument();
     expect(container.querySelector('[aria-busy="true"]')).toBeInTheDocument();
+  });
+
+  it('내 투표 집계를 기다리는 동안에는 0 을 비추지 않는다', () => {
+    useMyVotesMock.mockReturnValue({ votes: null, isLoaded: false });
+
+    const { container } = renderPage(true);
+
+    expect(screen.queryByText(/개 이슈에서 내가 선택한 패턴이에요/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('meter')).not.toBeInTheDocument();
+    expect(container.querySelector('[aria-busy="true"]')).toBeInTheDocument();
+  });
+});
+
+describe('MePageContainer 서버 계산 실패', () => {
+  beforeEach(() => {
+    useMyPerspectiveMock.mockReturnValue({ perspective: null, isLoaded: true });
+    useMyVotesMock.mockReturnValue({
+      votes: [{ slug: 'a', choice: VoteChoice.AGREE, votedAt: '2026-08-01T00:00:00.000Z' }],
+      isLoaded: true,
+    });
+  });
+
+  it('계산을 불러오지 못해도 목 데이터로 대신하지 않는다', () => {
+    renderPage(true);
+
+    expect(screen.queryByText('원전을 늘려야 할까?')).not.toBeInTheDocument();
+    expect(screen.queryByText('42')).not.toBeInTheDocument();
+    expect(screen.queryByText(/18개 이슈에서 내가 선택한 패턴이에요/)).not.toBeInTheDocument();
+  });
+
+  it('빈 축 5개와 실패 안내를 보여준다', () => {
+    renderPage(true);
+
+    const meters = screen.getAllByRole('meter');
+
+    expect(meters).toHaveLength(5);
+    expect(meters.every((meter) => meter.firstElementChild === null)).toBe(true);
+    expect(screen.getByText(PERSPECTIVE_ERROR_TEXT)).toBeInTheDocument();
+    expect(screen.queryByText(/축에 반영된 투표/)).not.toBeInTheDocument();
   });
 });
 

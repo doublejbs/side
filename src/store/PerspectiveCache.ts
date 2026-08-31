@@ -71,7 +71,9 @@ const handleUnauthorized = (): void => {
 
 /**
  * 서버 오류·네트워크 실패. 다음 마운트에서 다시 시도하도록 요청 표시를 되돌린다.
- * 이미 받아 둔 관점은 그대로 두고, 아직 아무것도 못 받았을 때만 "계산 없음" 으로 확정한다.
+ * 이미 받아 둔 관점은 그대로 두고, 아직 아무것도 못 받았을 때만 "불러오지 못함" 으로 확정한다.
+ * 이 확정은 목 데이터로 되돌아가라는 뜻이 아니다. 화면(`useMePageState`)은 서버 모드 + 로그인이면
+ * 빈 축과 실패 안내를 보여준다. 근거: docs/PerspectiveSpec.md 5장.
  */
 const handleFailure = (): void => {
   hasRequested = false;

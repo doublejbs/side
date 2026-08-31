@@ -1,8 +1,8 @@
 import {
-  issueAxesSchema,
   keyPointsSchema,
   mediaPerspectivesSchema,
   opinionGroupsSchema,
+  parseIssueAxes,
 } from '@/data/IssueJsonSchemas';
 import {
   toDomainClaimSide,
@@ -20,7 +20,6 @@ import type {
   OpinionGroup,
   VoteDistribution,
 } from '@/domain/Issue';
-import type { IssueAxis } from '@/domain/IssueAxis';
 
 /** Prisma `Evidence` 행에서 도메인 변환에 필요한 부분. */
 export interface EvidenceRow {
@@ -98,12 +97,6 @@ const parseKeyPoints = (value: unknown): KeyPoint[] => {
 
 const parseMediaPerspectives = (value: unknown): MediaPerspective[] => {
   const parsed = mediaPerspectivesSchema.safeParse(value);
-
-  return parsed.success ? parsed.data : [];
-};
-
-const parseIssueAxes = (value: unknown): IssueAxis[] => {
-  const parsed = issueAxesSchema.safeParse(value);
 
   return parsed.success ? parsed.data : [];
 };
