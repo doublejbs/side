@@ -3,13 +3,18 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ClaimFeedback } from '@/domain/ClaimFeedback';
 import type { SessionUser } from '@/domain/SessionUser';
 import { VoteChoice } from '@/domain/VoteChoice';
-import type { ClaimFeedbackResponse, VoteResultResponse } from '@/domain/VoteApiTypes';
+import type {
+  ClaimFeedbackResponse,
+  MyVotesResponse,
+  VoteResultResponse,
+} from '@/domain/VoteApiTypes';
 import { InMemoryVoteStore } from '@/server/InMemoryVoteStore';
 import { VoteApiErrorCode } from '@/server/VoteApiErrorCode';
 import {
   handleCastVote,
   handleClaimFeedback,
   handleGetMyVote,
+  handleListMyVotes,
   serverVoteDisabledResponse,
 } from '@/server/voteHandlers';
 
@@ -216,6 +221,51 @@ describe('handleGetMyVote', () => {
     const response = await handleGetMyVote({ store, sessionUser: null, slug: 'unknown' });
 
     expect(response.status).toBe(404);
+  });
+});
+
+describe('handleListMyVotes', () => {
+  it('비로그인이면 401 이다', async () => {
+    const response = await handleListMyVotes({ store, sessionUser: null });
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({ error: VoteApiErrorCode.LOGIN_REQUIRED });
+  });
+
+  it('투표한 적이 없으면 빈 목록이다', async () => {
+    const response = await handleListMyVotes({ store, sessionUser: USER });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ votes: [] } satisfies MyVotesResponse);
+  });
+
+  it('내 표만 최근 순서로 slug 와 함께 돌려준다', async () => {
+    const otherSlug = 'nuclear-expansion';
+    const otherIssueId = 'issue-2';
+
+    store = new InMemoryVoteStore({ issues: { [SLUG]: ISSUE_ID, [otherSlug]: otherIssueId } });
+
+    await store.castVote(ISSUE_ID, USER.id, VoteChoice.AGREE);
+    await store.castVote(otherIssueId, USER.id, VoteChoice.DISAGREE);
+    await store.castVote(ISSUE_ID, 'user-2', VoteChoice.UNSURE);
+
+    const response = await handleListMyVotes({ store, sessionUser: USER });
+    const body = response.body as MyVotesResponse;
+
+    expect(body.votes.map((vote) => vote.slug)).toEqual([otherSlug, SLUG]);
+    expect(body.votes[0].choice).toBe(VoteChoice.DISAGREE);
+    expect(Date.parse(body.votes[0].votedAt)).not.toBeNaN();
+  });
+
+  it('아직 발행되지 않은 이슈의 표는 빼고 돌려준다', async () => {
+    await store.castVote(ISSUE_ID, USER.id, VoteChoice.AGREE);
+    await store.castVote('draft-issue', USER.id, VoteChoice.DISAGREE);
+
+    const response = await handleListMyVotes({ store, sessionUser: USER });
+
+    expect(response.body).toEqual({
+      votes: [{ slug: SLUG, choice: VoteChoice.AGREE, votedAt: expect.any(String) }],
+    });
   });
 });
 

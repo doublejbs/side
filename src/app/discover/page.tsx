@@ -12,6 +12,7 @@ import { toIssueSummary } from '@/domain/IssueSummary';
 import { toOpinionGroupSummary } from '@/domain/OpinionGroupSummary';
 import { buildLoginHref } from '@/lib/auth/buildLoginHref';
 import { isAuthEnabled } from '@/lib/auth/isAuthEnabled';
+import { isServerVoteEnabled } from '@/server/isServerVoteEnabled';
 
 import styles from './page.module.css';
 
@@ -34,6 +35,7 @@ const DiscoverPage = async () => {
   const firstOpinionGroup = issues[0]?.opinionGroups[0];
   const similarGroup = firstOpinionGroup ? toOpinionGroupSummary(firstOpinionGroup) : null;
   const loginHref = buildLoginHref('/discover');
+  const isServerEnabled = isServerVoteEnabled();
 
   return (
     <main className={styles.page}>
@@ -43,9 +45,19 @@ const DiscoverPage = async () => {
       <PageHeroView title="발견" description="새로운 관점을 찾는 공간이에요" />
 
       <div className={styles.content}>
-        <MostDifferentIssueContainer candidates={candidates} loginHref={loginHref} />
+        <MostDifferentIssueContainer
+          candidates={candidates}
+          loginHref={loginHref}
+          isServerEnabled={isServerEnabled}
+        />
         {mostDividedIssue ? <MostDividedIssueView issue={mostDividedIssue} /> : null}
-        {similarGroup ? <SimilarGroupContainer group={similarGroup} loginHref={loginHref} /> : null}
+        {similarGroup ? (
+          <SimilarGroupContainer
+            group={similarGroup}
+            loginHref={loginHref}
+            isServerEnabled={isServerEnabled}
+          />
+        ) : null}
       </div>
     </main>
   );

@@ -28,6 +28,8 @@ interface Props {
   patternIssueCount: number;
   readEvidenceCount: number;
   loginHref: string;
+  /** 서버 저장이 켜져 있는지. 페이지(서버 컴포넌트)가 알려준다. */
+  isServerEnabled?: boolean;
 }
 
 /**
@@ -41,6 +43,7 @@ export const MePageContainer = ({
   patternIssueCount,
   readEvidenceCount,
   loginHref,
+  isServerEnabled = false,
 }: Props) => {
   const { user, isLoaded } = useSessionUser();
 
@@ -98,6 +101,7 @@ export const MePageContainer = ({
           <ParticipationTilesContainer
             readEvidenceCount={readEvidenceCount}
             changedCount={opinionChangeItems.length}
+            isServerEnabled={isServerEnabled}
           />
         </section>
       </div>

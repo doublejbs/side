@@ -1,5 +1,6 @@
 import { ClaimFeedback } from '@/domain/ClaimFeedback';
 import type { VoteDistribution } from '@/domain/Issue';
+import type { MyVote } from '@/domain/MyVote';
 import { VoteChoice } from '@/domain/VoteChoice';
 
 /** `GET /api/issues/[slug]/votes/me`, `POST /api/issues/[slug]/votes` 응답. */
@@ -8,6 +9,11 @@ export interface VoteResultResponse {
   distribution: VoteDistribution;
   participantCount: number;
   myChoice: VoteChoice | null;
+}
+
+/** `GET /api/me/votes` 응답. 최근에 바꾼 순서다. */
+export interface MyVotesResponse {
+  votes: MyVote[];
 }
 
 /** `POST /api/issues/[slug]/votes` 요청 본문. */

@@ -2,11 +2,16 @@ import { z } from 'zod';
 
 import { aggregateVotes } from '@/data/voteAggregation';
 import { ClaimFeedback } from '@/domain/ClaimFeedback';
+import type { MyVote } from '@/domain/MyVote';
 import type { SessionUser } from '@/domain/SessionUser';
 import { VoteChoice } from '@/domain/VoteChoice';
-import type { ClaimFeedbackResponse, VoteResultResponse } from '@/domain/VoteApiTypes';
+import type {
+  ClaimFeedbackResponse,
+  MyVotesResponse,
+  VoteResultResponse,
+} from '@/domain/VoteApiTypes';
 import { VoteApiErrorCode } from '@/server/VoteApiErrorCode';
-import type { VoteStore } from '@/server/VoteStore';
+import type { MyVoteRow, VoteStore } from '@/server/VoteStore';
 
 /** 라우트 파일이 그대로 `Response` 로 옮겨 담는 결과. */
 export interface HandlerResponse {
@@ -81,6 +86,32 @@ export const handleGetMyVote = async ({
   }
 
   return { status: 200, body: await buildVoteResult(store, slug, issueId, sessionUser?.id ?? null) };
+};
+
+/** 스토어가 발행된 이슈의 표만 주지만, 그중 slug 가 비어 있는 표는 화면이 가리킬 수 없어 뺀다. */
+const toMyVotes = (rows: MyVoteRow[]): MyVote[] =>
+  rows.flatMap((row) =>
+    row.issueSlug === null
+      ? []
+      : [{ slug: row.issueSlug, choice: row.choice, votedAt: row.votedAt }],
+  );
+
+/**
+ * `GET /api/me/votes` — 내가 던진 표 전체(최근 순).
+ * "나"·"발견" 탭의 내 투표 집계를 localStorage 대신 `userId` 기준 서버 집계로 채운다.
+ * 근거: docs/AuthSpec.md 4.4.
+ */
+export const handleListMyVotes = async ({
+  store,
+  sessionUser,
+}: BaseDeps): Promise<HandlerResponse> => {
+  if (!sessionUser) {
+    return loginRequiredResponse();
+  }
+
+  const body: MyVotesResponse = { votes: toMyVotes(await store.listMyVotes(sessionUser.id)) };
+
+  return { status: 200, body };
 };
 
 /** `POST /api/issues/[slug]/votes` — 로그인 사용자 1인 1표 upsert 후 갱신된 분포를 돌려준다. */

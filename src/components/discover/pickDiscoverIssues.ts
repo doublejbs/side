@@ -1,6 +1,5 @@
 import type { VoteDistribution } from '@/domain/Issue';
 import type { IssueSummary } from '@/domain/IssueSummary';
-import type { VoteRecord } from '@/domain/UserRecord';
 import { VoteChoice } from '@/domain/VoteChoice';
 import { getVoteChoiceKey } from '@/domain/voteChoiceKey';
 
@@ -17,19 +16,23 @@ const getMyChoiceShare = (distribution: VoteDistribution, choice: VoteChoice): n
 export const getAgreeDisagreeGap = (issue: IssueSummary): number =>
   Math.abs(issue.distribution.agree - issue.distribution.disagree);
 
-/** 내가 투표한 이슈 중 내 선택의 전체 비율이 가장 낮은 이슈. 투표 기록 키는 slug 다. */
+/**
+ * 내가 투표한 이슈 중 내 선택의 전체 비율이 가장 낮은 이슈.
+ * 내 선택은 slug 로 찾으므로 서버 집계·목 모드 기록 어느 쪽이든
+ * `toVoteChoiceBySlug` 로 맞춘 맵을 넘긴다.
+ */
 export const pickMostDifferentIssue = (
   issues: IssueSummary[],
-  votes: Record<string, VoteRecord>,
+  choiceBySlug: Map<string, VoteChoice>,
 ): IssueSummary | null => {
   const candidates: Candidate[] = issues.flatMap((issue) => {
-    const vote = votes[issue.slug];
+    const choice = choiceBySlug.get(issue.slug);
 
-    if (!vote) {
+    if (!choice) {
       return [];
     }
 
-    return [{ issue, share: getMyChoiceShare(issue.distribution, vote.choice) }];
+    return [{ issue, share: getMyChoiceShare(issue.distribution, choice) }];
   });
 
   if (candidates.length === 0) {

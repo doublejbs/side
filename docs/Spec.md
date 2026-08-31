@@ -195,13 +195,15 @@ interface OpinionChange { issueId: string; before: VoteRecord; after: VoteRecord
 - "당신과 가장 다른 의견" 카드: 내 선택 vs 전체 분포가 가장 다른 이슈(투표 기록 기준; 없으면 안내 문구).
 - "의외로 의견이 갈리는 이슈": 찬반 차이가 가장 작은 이슈.
 - "내 생각과 비슷한 그룹": 첫 이슈 그룹 A 재사용 + "참여한 N개 이슈 기반". 투표 기록이 없으면 그룹 카드 대신 안내 문구와 "이슈 보러 가기" 링크만 보여준다.
-- 페이지는 서버 컴포넌트다. localStorage 투표에 의존하는 부분(`MostDifferentIssueContainer`, `SimilarGroupContainer`)만 클라이언트이며, `pickMostDifferentIssue`에는 경량 `IssueSummary[]` 후보만 넘긴다.
+- 서버 모드(`isServerEnabled`)에서는 두 섹션 모두 localStorage 대신 서버 집계(`userId` 기준 `GET /api/me/votes`)를 쓴다. 목 모드에서만 localStorage 기록을 쓴다.
+- 페이지는 서버 컴포넌트다. 내 투표에 의존하는 부분(`MostDifferentIssueContainer`, `SimilarGroupContainer`)만 클라이언트이며, `pickMostDifferentIssue`에는 경량 `IssueSummary[]` 후보와 `Map<slug, VoteChoice>` 만 넘긴다.
 - 로그인이 켜져 있고 세션이 없으면 두 섹션은 카드 대신 안내 문구 + 로그인 링크(`/login?next=/discover`)를 보여준다.
 
 ### 06 나 `/me`
 - "나의 정치 관점": 축 5개(경제/복지/노동/환경/외교) 슬라이더 시각화(읽기 전용), 좌우 라벨, 안내문 "성향 라벨이 아니라 기록입니다".
 - "내 생각이 바뀐 이슈": before → after 카드 + "무엇이 생각을 바꿨나요?".
-- "나의 참여" 타일 3개(투표한 이슈 = localStorage 투표 수, 읽은 근거, 바뀐 생각). 페이지는 서버 컴포넌트이고 투표 수만 `ParticipationTilesContainer`(클라이언트)가 채운다.
+- "나의 참여" 타일 3개(투표한 이슈, 읽은 근거, 바뀐 생각). 페이지는 서버 컴포넌트이고 투표 수만 `ParticipationTilesContainer`(클라이언트)가 채운다.
+- 서버 모드(`isServerEnabled`)에서는 투표한 이슈 수가 서버 집계(`userId` 기준 `GET /api/me/votes`)다(비로그인이면 0). 목 모드에서만 localStorage 투표 수를 쓴다.
 - 로그인 시 최상단에 계정 카드(`AccountCardView` — 아바타·이름·이메일·로그아웃). 로그인이 켜져 있고 세션이 없으면 본문 대신 `LoginRequiredView`(안내 카드 + 로그인 버튼)만 렌더한다.
 
 ## 7. 컴포넌트 구조

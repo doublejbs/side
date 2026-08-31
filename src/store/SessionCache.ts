@@ -78,6 +78,15 @@ export const startSessionLoad = (): void => {
     });
 };
 
+/**
+ * 들고 있던 세션이 더는 유효하지 않을 때(예: 다른 API 가 401 을 준다) 비로그인으로 확정하고
+ * 다음 마운트에서 다시 받아오게 요청 표시를 지운다.
+ */
+export const invalidateSession = (): void => {
+  hasRequested = false;
+  publishSession(null);
+};
+
 /** 테스트에서 모듈 스코프 저장소를 비운다. */
 export const resetSession = (): void => {
   snapshot = PENDING;
