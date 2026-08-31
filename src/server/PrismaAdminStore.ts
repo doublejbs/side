@@ -1,6 +1,7 @@
 import { IssueStatus as PrismaIssueStatus, Prisma, type PrismaClient } from '@prisma/client';
 
 import {
+  issueAxesSchema,
   issueClassificationSchema,
   keyPointsSchema,
   mediaPerspectivesSchema,
@@ -18,6 +19,7 @@ import {
 } from '@/data/PrismaEnumMappers';
 import type { EvidenceSupport } from '@/domain/EvidenceSupport';
 import type { KeyPoint, MediaPerspective, OpinionGroup } from '@/domain/Issue';
+import type { IssueAxis } from '@/domain/IssueAxis';
 import type { IssueClassification } from '@/domain/IssueClassification';
 import { IssueStatus } from '@/domain/IssueStatus';
 import { computeCentroid } from '@/pipeline/computeCentroid';
@@ -48,6 +50,12 @@ import {
 /** Json 컬럼은 검증에 실패하면 폼이 깨지지 않도록 빈 배열로 떨어뜨린다. */
 const parseKeyPoints = (value: unknown): KeyPoint[] => {
   const parsed = keyPointsSchema.safeParse(value);
+
+  return parsed.success ? parsed.data : [];
+};
+
+const parseIssueAxes = (value: unknown): IssueAxis[] => {
+  const parsed = issueAxesSchema.safeParse(value);
 
   return parsed.success ? parsed.data : [];
 };
@@ -115,6 +123,7 @@ const ARTICLE_TAKE = 200;
 const toIssueUpdateData = (patch: AdminIssuePatch): Prisma.IssueUpdateInput => ({
   ...(patch.question === undefined ? {} : { question: patch.question }),
   ...(patch.tags === undefined ? {} : { tags: patch.tags }),
+  ...(patch.axes === undefined ? {} : { axes: toJson(patch.axes) }),
   ...(patch.summary === undefined ? {} : { summary: patch.summary }),
   ...(patch.keyPoints === undefined ? {} : { keyPoints: toJson(patch.keyPoints) }),
   ...(patch.commonCoverage === undefined ? {} : { commonCoverage: patch.commonCoverage }),
@@ -170,6 +179,7 @@ export class PrismaAdminStore implements AdminStore {
         slug: true,
         question: true,
         tags: true,
+        axes: true,
         summary: true,
         keyPoints: true,
         commonCoverage: true,
@@ -230,6 +240,7 @@ export class PrismaAdminStore implements AdminStore {
       slug: row.slug,
       question: row.question,
       tags: row.tags,
+      axes: parseIssueAxes(row.axes),
       summary: row.summary,
       keyPoints: parseKeyPoints(row.keyPoints),
       commonCoverage: row.commonCoverage,

@@ -103,6 +103,8 @@ model Issue {
   /// 질문형 제목
   question          String
   tags              String[]
+  /// IssueAxis[] — 이 이슈가 걸린 관점 축(0~2개). 근거: docs/PerspectiveSpec.md 1장.
+  axes              Json?
   /// 3~5문장
   summary           String[]
   /// KeyPoint[] {id,title,question}
@@ -115,9 +117,10 @@ model Issue {
   /// 클러스터 중심 임베딩
   centroid          Float[]
 
-  articles Article[]
-  claims   Claim[]
-  votes    Vote[]
+  articles   Article[]
+  claims     Claim[]
+  votes      Vote[]
+  voteEvents VoteEvent[]
 
   reviewNote             String?
   /// classify 가 매긴 정책 논쟁성 점수(0~100). 없으면 아직 분류된 적이 없다.
@@ -175,9 +178,9 @@ model Evidence {
 }
 
 model Vote {
-  id      String @id @default(cuid())
+  id      String  @id @default(cuid())
   issueId String
-  issue   Issue  @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  issue   Issue   @relation(fields: [issueId], references: [id], onDelete: Cascade)
   /// 로그인 이전(legacy) 익명 식별자. 계정으로 이전하면 null 이 된다.
   anonId  String?
   /// Supabase auth.users.id. 새 투표는 항상 이 값으로만 저장한다.
@@ -194,10 +197,24 @@ model Vote {
   @@index([userId])
 }
 
-model ClaimFeedbackRecord {
+/// 투표 변경 이력. 신규 투표와 선택이 바뀐 투표만 남긴다. 근거: docs/PerspectiveSpec.md 2장.
+model VoteEvent {
   id      String @id @default(cuid())
+  issueId String
+  issue   Issue  @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  /// Supabase auth.users.id. 익명 표 이전(claimAnonRecords)은 이벤트를 만들지 않는다.
+  userId  String
+
+  choice    VoteChoice
+  createdAt DateTime   @default(now())
+
+  @@index([userId, issueId, createdAt])
+}
+
+model ClaimFeedbackRecord {
+  id      String  @id @default(cuid())
   claimId String
-  claim   Claim  @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  claim   Claim   @relation(fields: [claimId], references: [id], onDelete: Cascade)
   /// 로그인 이전(legacy) 익명 식별자. 계정으로 이전하면 null 이 된다.
   anonId  String?
   /// Supabase auth.users.id. 새 피드백은 항상 이 값으로만 저장한다.

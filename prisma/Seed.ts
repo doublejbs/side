@@ -135,6 +135,8 @@ const seedIssue = async (
     status: IssueStatus.PUBLISHED,
     question: issue.question,
     tags: issue.tags,
+    // 관점 축은 목 데이터에 수동 지정한 값을 그대로 저장한다(docs/PerspectiveSpec.md 1장).
+    axes: toJsonValue(issue.axes),
     summary: issue.summary,
     keyPoints: toJsonValue(issue.keyPoints),
     commonCoverage: issue.commonCoverage,

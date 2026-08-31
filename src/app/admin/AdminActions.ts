@@ -6,6 +6,7 @@ import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+import { MAX_ISSUE_AXES } from '@/domain/IssueAxis';
 import { IssueStatus } from '@/domain/IssueStatus';
 import { MEDIA_LEANING_ORDER } from '@/domain/mediaLeaningOrder';
 import { getOpinionGroupLabel } from '@/domain/opinionGroupPresenter';
@@ -20,7 +21,12 @@ import {
   ADMIN_SESSION_DURATION_MS,
   createAdminSessionCookie,
 } from '@/server/adminSession';
-import { parseEvidenceType, parseMediaLeaning } from '@/server/adminEnumParsers';
+import {
+  parseAxisDirection,
+  parseEvidenceType,
+  parseMediaLeaning,
+  parsePerspectiveAxis,
+} from '@/server/adminEnumParsers';
 import {
   KEY_POINT_COUNT,
   MEDIA_PERSPECTIVE_COUNT,
@@ -31,6 +37,8 @@ import {
   groupDescriptionField,
   groupIdField,
   groupShareField,
+  issueAxisAxisField,
+  issueAxisDirectionField,
   keyPointIdField,
   keyPointQuestionField,
   keyPointTitleField,
@@ -54,6 +62,7 @@ import {
   saveIssue,
   savePublisher,
   updateEvidenceType,
+  type IssueAxisInput,
   type SaveIssueInput,
 } from '@/server/adminUseCases';
 import { getAdminStore, isAdminDatabaseConnected } from '@/server/getAdminStore';
@@ -109,6 +118,16 @@ const isPasswordMatch = (input: string, expected: string): boolean => {
   return timingSafeEqual(inputBuffer, expectedBuffer);
 };
 
+/**
+ * 관점 축 편집 칸을 읽는다. 미지정 칸을 버리고 겹치는 축을 정리하는 일은 `saveIssue` 가 맡는다.
+ * 근거: `docs/PerspectiveSpec.md` 1장.
+ */
+const parseIssueAxes = (formData: FormData): IssueAxisInput[] =>
+  range(MAX_ISSUE_AXES).map((index) => ({
+    axis: parsePerspectiveAxis(readText(formData, issueAxisAxisField(index))),
+    agreeDirection: parseAxisDirection(readText(formData, issueAxisDirectionField(index))),
+  }));
+
 const parseIssueForm = (formData: FormData): SaveIssueInput => {
   const claimIds = formData
     .getAll(AdminFormField.CLAIM_IDS)
@@ -147,6 +166,7 @@ const parseIssueForm = (formData: FormData): SaveIssueInput => {
       title: readText(formData, claimTitleField(claimId)),
       description: readText(formData, claimDescriptionField(claimId)),
     })),
+    axes: parseIssueAxes(formData),
   };
 };
 

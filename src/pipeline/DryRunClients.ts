@@ -26,6 +26,8 @@ const DRY_RUN_CLASSIFICATION = {
     '검수 화면에서 반드시 다시 생성해야 한다.',
   ],
   keyClaims: ['자리표시자 주장 1', '자리표시자 주장 2', '자리표시자 주장 3'],
+  // 자리표시자로 관점 축을 지어내면 검수에서 그대로 승인될 수 있으므로 비워 둔다.
+  axes: [],
   duplicateOfIssueId: null,
 };
 

@@ -201,9 +201,10 @@ interface OpinionChange { issueId: string; before: VoteRecord; after: VoteRecord
 
 ### 06 나 `/me`
 - "나의 정치 관점": 축 5개(경제/복지/노동/환경/외교) 슬라이더 시각화(읽기 전용), 좌우 라벨, 안내문 "성향 라벨이 아니라 기록입니다".
-- "내 생각이 바뀐 이슈": before → after 카드 + "무엇이 생각을 바꿨나요?".
-- "나의 참여" 타일 3개(투표한 이슈, 읽은 근거, 바뀐 생각). 페이지는 서버 컴포넌트이고 투표 수만 `ParticipationTilesContainer`(클라이언트)가 채운다.
+- "내 생각이 바뀐 이슈": before → after 카드 + "무엇이 생각을 바꿨나요?". 바뀐 기록이 없으면 "생각이 바뀐 기록이 아직 없어요" 카드를 대신 보여준다.
+- "나의 참여" 타일 3개(투표한 이슈, 근거 피드백, 바뀐 생각). 페이지는 서버 컴포넌트이고 투표 수만 `ParticipationTilesContainer`(클라이언트)가 채운다.
 - 서버 모드(`isServerEnabled`)에서는 투표한 이슈 수가 서버 집계(`userId` 기준 `GET /api/me/votes`)다(비로그인이면 0). 목 모드에서만 localStorage 투표 수를 쓴다.
+- **서버 모드 + 로그인**: 축 값·의견 변화·근거 피드백 수를 `GET /api/me/perspective`(`useMyPerspective`)가 내 표로 계산한 값으로 채운다. 표가 하나도 없는 축은 마커 없이 트랙만 그리고 "아직 이 분야 투표가 없어요"를 덧붙이며, 축 카드 상단에 "내 투표 N개 기준"을 적는다. 계산을 기다리는 동안에는 목 값을 비추지 않는다. 목 모드·비로그인은 `perspectiveData`의 목 데이터를 그대로 쓴다. 상세는 `docs/PerspectiveSpec.md` 5장.
 - 로그인 시 최상단에 계정 카드(`AccountCardView` — 아바타·이름·이메일·로그아웃). 로그인이 켜져 있고 세션이 없으면 본문 대신 `LoginRequiredView`(안내 카드 + 로그인 버튼)만 렌더한다.
 
 ## 7. 컴포넌트 구조
@@ -241,14 +242,16 @@ src/
     discover/ MostDifferentIssueContainer(client), MostDifferentIssueView, MostDividedIssueView,
              IssueQuestionLinkView, SimilarGroupContainer(client), SimilarGroupView,
              pickDiscoverIssues
-    me/      MeHeaderView, PerspectiveAxesView, OpinionChangeView, ParticipationTilesView,
-             ParticipationTilesContainer(client), formatMonthsAgo
+    me/      MeHeaderView, PerspectiveAxesView, OpinionChangeView, OpinionChangeEmptyView,
+             ParticipationTilesView, ParticipationTilesContainer(client),
+             MePageContainer(client), useMePageState, formatMonthsAgo
   domain/   enum 파일들, Issue.ts, IssueSummary.ts, IssueResultSummary.ts,
             OpinionGroupSummary.ts, UserRecord.ts, computeDistribution.ts,
             voteChoiceLabel.ts, claimSidePresenter.ts
   data/     issues/*.ts, IssueRepository.ts, perspectiveData.ts
   store/    UserRecordStore.ts, useVote.ts, useUserVotes.ts, useClaimFeedback.ts,
-            VoteApiClient.ts, LoginRequiredError.ts
+            VoteApiClient.ts, LoginRequiredError.ts, MyVotesCache.ts/useMyVotes.ts,
+            PerspectiveCache.ts/useMyPerspective.ts
   server/   서버 전용 모듈 — 관리자 세션·서버 액션 유스케이스, 투표 저장소, 쿠키 서명
   pipeline/ 뉴스 수집부터 논점 추출까지의 파이프라인 단계와 외부 클라이언트 경계
   testing/  테스트에서만 쓰는 가짜 구현 (FakePrismaClient 등)

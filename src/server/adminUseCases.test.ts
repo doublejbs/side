@@ -1,7 +1,9 @@
+import { AxisDirection } from '@/domain/AxisDirection';
 import { ClaimSide } from '@/domain/ClaimSide';
 import { EvidenceType } from '@/domain/EvidenceType';
 import { IssueStatus } from '@/domain/IssueStatus';
 import { MediaLeaning } from '@/domain/MediaLeaning';
+import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
 import { AdminActionError } from '@/server/AdminActionError';
 import { AdminMessage } from '@/server/AdminMessage';
 import {
@@ -36,6 +38,7 @@ const createIssue = (overrides: Partial<AdminIssueDetail> = {}): AdminIssueDetai
   slug: null,
   question: '정년을 연장해야 할까?',
   tags: [],
+  axes: [],
   summary: [],
   keyPoints: [],
   commonCoverage: [],
@@ -778,5 +781,70 @@ describe('mergeIssue', () => {
     await expect(mergeIssue(store, 'source', 'target')).rejects.toThrow(AdminActionError);
     expect((await store.getIssue('source'))?.articles).toHaveLength(2);
     expect((await store.getIssue('target'))?.articles).toHaveLength(0);
+  });
+});
+
+describe('saveIssue 관점 축', () => {
+  let store: InMemoryAdminStore;
+
+  beforeEach(() => {
+    store = new InMemoryAdminStore({ issues: [createIssue()] });
+  });
+
+  it('축 칸을 넘기지 않으면 저장된 축을 그대로 둔다', async () => {
+    await store.updateIssue('issue-1', {
+      axes: [{ axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT }],
+    });
+
+    await saveIssue(store, createSaveInput());
+
+    expect((await store.getIssue('issue-1'))?.axes).toEqual([
+      { axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT },
+    ]);
+  });
+
+  it('고르지 않은 칸은 버리고 고른 축만 저장한다', async () => {
+    await saveIssue(
+      store,
+      createSaveInput({
+        axes: [
+          { axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT },
+          { axis: null, agreeDirection: AxisDirection.LEFT },
+        ],
+      }),
+    );
+
+    expect((await store.getIssue('issue-1'))?.axes).toEqual([
+      { axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT },
+    ]);
+  });
+
+  it('같은 축이 겹치면 첫 칸만 남긴다', async () => {
+    await saveIssue(
+      store,
+      createSaveInput({
+        axes: [
+          { axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT },
+          { axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.LEFT },
+        ],
+      }),
+    );
+
+    expect((await store.getIssue('issue-1'))?.axes).toEqual([
+      { axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT },
+    ]);
+  });
+
+  it('모두 미지정이면 축을 비운다', async () => {
+    await store.updateIssue('issue-1', {
+      axes: [{ axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT }],
+    });
+
+    await saveIssue(
+      store,
+      createSaveInput({ axes: [{ axis: null, agreeDirection: AxisDirection.LEFT }] }),
+    );
+
+    expect((await store.getIssue('issue-1'))?.axes).toEqual([]);
   });
 });

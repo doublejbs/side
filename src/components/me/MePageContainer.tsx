@@ -5,28 +5,25 @@ import { LoginRequiredView } from '@/components/auth/LoginRequiredView';
 import { PageHeroView } from '@/components/common/PageHeroView';
 import { SectionTitleView } from '@/components/common/SectionTitleView';
 import { LegalLinksView } from '@/components/legal/LegalLinksView';
+import { OpinionChangeEmptyView } from '@/components/me/OpinionChangeEmptyView';
 import { OpinionChangeView } from '@/components/me/OpinionChangeView';
 import { ParticipationTilesContainer } from '@/components/me/ParticipationTilesContainer';
 import { PerspectiveAxesView } from '@/components/me/PerspectiveAxesView';
-import type { OpinionChange, PerspectivePoint } from '@/domain/UserRecord';
+import { useMePageState } from '@/components/me/useMePageState';
+import type { MyOpinionChange } from '@/domain/MyPerspective';
+import type { PerspectivePoint } from '@/domain/UserRecord';
 import { isAuthEnabled } from '@/lib/auth/isAuthEnabled';
-import { useSessionUser } from '@/store/useSessionUser';
 
 import styles from './MePageContainer.module.css';
 
-/** 서버가 목 데이터와 이슈 조회 결과를 합쳐 넘기는 항목. 이슈는 질문만 쓰므로 질문만 받는다. */
-export interface MeOpinionChangeItem {
-  change: OpinionChange;
-  question: string;
-  persuadedClaimTitle: string;
-}
-
 interface Props {
-  opinionChangeItems: MeOpinionChangeItem[];
+  /** 목 모드·비로그인에서 쓰는 의견 변화. 서버 모드에서는 실제 계산으로 대체된다. */
+  opinionChanges: MyOpinionChange[];
   perspectivePoints: PerspectivePoint[];
   /** 관점 축을 계산한 기준 이슈 수. */
   patternIssueCount: number;
-  readEvidenceCount: number;
+  /** 목 모드에서 쓰는 근거 피드백 수. */
+  feedbackCount: number;
   loginHref: string;
   /** 서버 저장이 켜져 있는지. 페이지(서버 컴포넌트)가 알려준다. */
   isServerEnabled?: boolean;
@@ -38,21 +35,27 @@ interface Props {
  * 근거: docs/AuthSpec.md 4.4.
  */
 export const MePageContainer = ({
-  opinionChangeItems,
+  opinionChanges,
   perspectivePoints,
   patternIssueCount,
-  readEvidenceCount,
+  feedbackCount,
   loginHref,
   isServerEnabled = false,
 }: Props) => {
-  const { user, isLoaded } = useSessionUser();
+  const state = useMePageState({
+    isServerEnabled,
+    mockPoints: perspectivePoints,
+    mockPatternIssueCount: patternIssueCount,
+    mockFeedbackCount: feedbackCount,
+    mockChanges: opinionChanges,
+  });
 
-  if (!isLoaded) {
+  if (!state.isSessionLoaded) {
     return <div className={styles.placeholder} aria-busy="true" />;
   }
 
   // 로그인이 켜져 있는데 세션이 없으면 내 기록을 계산할 수 없으므로 안내 카드만 보여준다.
-  if (isAuthEnabled() && !user) {
+  if (isAuthEnabled() && !state.user) {
     return (
       <>
         <PageHeroView title="나" />
@@ -71,39 +74,44 @@ export const MePageContainer = ({
     <>
       <PageHeroView
         title="나의 정치 관점"
-        description={`${patternIssueCount}개 이슈에서 내가 선택한 패턴이에요. 성향 라벨이 아니라 기록입니다.`}
+        description={`${state.patternIssueCount}개 이슈에서 내가 선택한 패턴이에요. 성향 라벨이 아니라 기록입니다.`}
       />
 
       <div className={styles.content}>
-        {user ? (
+        {state.user ? (
           <div className={styles.accountBlock}>
-            <AccountCardView user={user} />
+            <AccountCardView user={state.user} />
             <LegalLinksView />
           </div>
         ) : null}
 
-        <PerspectiveAxesView points={perspectivePoints} />
+        {state.isPerspectiveLoading ? (
+          <div className={styles.placeholder} aria-busy="true" />
+        ) : (
+          <>
+            <PerspectiveAxesView points={state.points} noticeText={state.axesNoticeText} />
 
-        <section className={styles.section}>
-          <SectionTitleView>내 생각이 바뀐 이슈</SectionTitleView>
-          {opinionChangeItems.map((item) => (
-            <OpinionChangeView
-              key={item.change.issueId}
-              change={item.change}
-              question={item.question}
-              persuadedClaimTitle={item.persuadedClaimTitle}
-            />
-          ))}
-        </section>
+            <section className={styles.section}>
+              <SectionTitleView>내 생각이 바뀐 이슈</SectionTitleView>
+              {state.changes.length === 0 ? (
+                <OpinionChangeEmptyView />
+              ) : (
+                state.changes.map((change) => (
+                  <OpinionChangeView key={change.slug} change={change} />
+                ))
+              )}
+            </section>
 
-        <section className={styles.section}>
-          <SectionTitleView>나의 참여</SectionTitleView>
-          <ParticipationTilesContainer
-            readEvidenceCount={readEvidenceCount}
-            changedCount={opinionChangeItems.length}
-            isServerEnabled={isServerEnabled}
-          />
-        </section>
+            <section className={styles.section}>
+              <SectionTitleView>나의 참여</SectionTitleView>
+              <ParticipationTilesContainer
+                feedbackCount={state.feedbackCount}
+                changedCount={state.changes.length}
+                isServerEnabled={isServerEnabled}
+              />
+            </section>
+          </>
+        )}
       </div>
     </>
   );

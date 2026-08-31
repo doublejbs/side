@@ -1,5 +1,12 @@
-import { IssueStatus, type Prisma, type PrismaClient } from '@prisma/client';
+import {
+  ClaimFeedback as PrismaClaimFeedback,
+  IssueStatus,
+  type Prisma,
+  type PrismaClient,
+  type VoteChoice as PrismaVoteChoice,
+} from '@prisma/client';
 
+import { issueAxesSchema } from '@/data/IssueJsonSchemas';
 import {
   toDomainClaimFeedback,
   toDomainVoteChoice,
@@ -8,9 +15,17 @@ import {
 } from '@/data/PrismaEnumMappers';
 import type { VoteCounts } from '@/data/voteAggregation';
 import type { ClaimFeedback } from '@/domain/ClaimFeedback';
+import type { IssueAxis } from '@/domain/IssueAxis';
 import type { VoteChoice } from '@/domain/VoteChoice';
 import { getVoteChoiceKey } from '@/domain/voteChoiceKey';
-import type { ClaimedAnonRecordCounts, MyVoteRow, VoteStore } from '@/server/VoteStore';
+import type {
+  ClaimedAnonRecordCounts,
+  MyPersuadedClaimRow,
+  MyVoteAxesRow,
+  MyVoteEventRow,
+  MyVoteRow,
+  VoteStore,
+} from '@/server/VoteStore';
 
 /** 유니크 제약 위반(Prisma). 같은 사용자의 첫 투표가 동시에 들어오면 upsert 가 이 오류로 실패한다. */
 const UNIQUE_CONSTRAINT_ERROR_CODE = 'P2002';
@@ -20,6 +35,13 @@ const isUniqueConstraintError = (error: unknown): boolean =>
   error !== null &&
   'code' in error &&
   (error as { code: unknown }).code === UNIQUE_CONSTRAINT_ERROR_CODE;
+
+/** Json 컬럼이 깨져 있어도 계산이 멈추지 않도록 빈 축으로 떨어뜨린다. */
+const parseIssueAxes = (value: unknown): IssueAxis[] => {
+  const parsed = issueAxesSchema.safeParse(value);
+
+  return parsed.success ? parsed.data : [];
+};
 
 /** 익명 레코드를 계정으로 옮길 때 쓰는 분류 결과. */
 interface AnonRecordSplit<Row> {
@@ -58,23 +80,58 @@ export class PrismaVoteStore implements VoteStore {
   }
 
   async castVote(issueId: string, userId: string, choice: VoteChoice): Promise<void> {
+    const prismaChoice = toPrismaVoteChoice(choice);
+
     try {
-      await this.prisma.vote.upsert({
-        where: { issueId_userId: { issueId, userId } },
-        create: { issueId, userId, choice: toPrismaVoteChoice(choice) },
-        update: { choice: toPrismaVoteChoice(choice) },
-      });
+      await this.prisma.$transaction((tx: Prisma.TransactionClient) =>
+        this.writeVote(tx, issueId, userId, prismaChoice, (client) =>
+          client.vote.upsert({
+            where: { issueId_userId: { issueId, userId } },
+            create: { issueId, userId, choice: prismaChoice },
+            update: { choice: prismaChoice },
+          }),
+        ),
+      );
     } catch (error) {
       if (!isUniqueConstraintError(error)) {
         throw error;
       }
 
       // 다른 요청이 같은 행을 먼저 만든 경우다. 이미 행이 있으므로 갱신으로 한 번만 다시 시도한다.
-      await this.prisma.vote.update({
-        where: { issueId_userId: { issueId, userId } },
-        data: { choice: toPrismaVoteChoice(choice) },
-      });
+      await this.prisma.$transaction((tx: Prisma.TransactionClient) =>
+        this.writeVote(tx, issueId, userId, prismaChoice, (client) =>
+          client.vote.update({
+            where: { issueId_userId: { issueId, userId } },
+            data: { choice: prismaChoice },
+          }),
+        ),
+      );
     }
+  }
+
+  /**
+   * 표를 쓰고, 신규이거나 선택이 바뀐 경우에만 이력을 남긴다.
+   * 표와 이력이 함께 남도록 한 트랜잭션 안에서 돌린다. 근거: docs/PerspectiveSpec.md 2장.
+   */
+  private async writeVote(
+    tx: Prisma.TransactionClient,
+    issueId: string,
+    userId: string,
+    choice: PrismaVoteChoice,
+    write: (client: Prisma.TransactionClient) => Promise<unknown>,
+  ): Promise<void> {
+    const existing = await tx.vote.findUnique({
+      where: { issueId_userId: { issueId, userId } },
+      select: { choice: true },
+    });
+
+    await write(tx);
+
+    if (existing?.choice === choice) {
+      return;
+    }
+
+    await tx.voteEvent.create({ data: { issueId, userId, choice } });
   }
 
   async getMyVote(issueId: string, userId: string): Promise<VoteChoice | null> {
@@ -114,6 +171,54 @@ export class PrismaVoteStore implements VoteStore {
       issueSlug: row.issue.slug,
       choice: toDomainVoteChoice(row.choice),
       votedAt: row.updatedAt.toISOString(),
+    }));
+  }
+
+  async listMyVoteEvents(userId: string): Promise<MyVoteEventRow[]> {
+    const rows = await this.prisma.voteEvent.findMany({
+      // 화면이 가리킬 수 없는 미발행 이슈의 이력은 애초에 빼고 읽는다.
+      where: { userId, issue: { status: IssueStatus.PUBLISHED } },
+      select: {
+        issueId: true,
+        choice: true,
+        createdAt: true,
+        issue: { select: { slug: true, question: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return rows.map((row) => ({
+      issueId: row.issueId,
+      issueSlug: row.issue.slug,
+      question: row.issue.question,
+      choice: toDomainVoteChoice(row.choice),
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
+  async listMyPersuadedClaims(userId: string): Promise<MyPersuadedClaimRow[]> {
+    const rows = await this.prisma.claimFeedbackRecord.findMany({
+      where: { userId, feedback: PrismaClaimFeedback.PERSUADED },
+      select: { claim: { select: { issueId: true, title: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return rows.map((row) => ({ issueId: row.claim.issueId, claimTitle: row.claim.title }));
+  }
+
+  async countMyClaimFeedbacks(userId: string): Promise<number> {
+    return this.prisma.claimFeedbackRecord.count({ where: { userId } });
+  }
+
+  async listMyVoteAxes(userId: string): Promise<MyVoteAxesRow[]> {
+    const rows = await this.prisma.vote.findMany({
+      where: { userId, issue: { status: IssueStatus.PUBLISHED } },
+      select: { choice: true, issue: { select: { axes: true } } },
+    });
+
+    return rows.map((row) => ({
+      axes: parseIssueAxes(row.issue.axes),
+      choice: toDomainVoteChoice(row.choice),
     }));
   }
 

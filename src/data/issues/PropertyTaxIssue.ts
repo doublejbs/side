@@ -1,6 +1,8 @@
+import { AxisDirection } from '@/domain/AxisDirection';
 import { ClaimSide } from '@/domain/ClaimSide';
 import { EvidenceType } from '@/domain/EvidenceType';
 import { MediaLeaning } from '@/domain/MediaLeaning';
+import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
 import type { Issue } from '@/domain/Issue';
 
 export const propertyTaxIssue: Issue = {
@@ -8,6 +10,10 @@ export const propertyTaxIssue: Issue = {
   slug: 'property-tax',
   question: '부동산 보유세를 강화해야 할까?',
   tags: ['부동산', '경제'],
+  axes: [
+    { axis: PerspectiveAxis.ECONOMY, agreeDirection: AxisDirection.RIGHT },
+    { axis: PerspectiveAxis.WELFARE, agreeDirection: AxisDirection.RIGHT },
+  ],
   participantCount: 4760,
   distribution: { agree: 41, disagree: 46, unsure: 13 },
   summary: [

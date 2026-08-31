@@ -1,8 +1,10 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { PerspectiveAxesView } from '@/components/me/PerspectiveAxesView';
+import { EMPTY_AXIS_NOTICE, PerspectiveAxesView } from '@/components/me/PerspectiveAxesView';
 import { PERSPECTIVE_POINTS } from '@/data/perspectiveData';
+import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
+import type { PerspectivePoint } from '@/domain/UserRecord';
 
 interface AxisExpectation {
   leftLabel: string;
@@ -62,5 +64,55 @@ describe('PerspectiveAxesView', () => {
     });
 
     expect(economyMeter.firstElementChild).toHaveStyle({ left: '62%' });
+  });
+
+  it('안내 문구를 넘기지 않으면 카드 상단에 아무것도 붙이지 않는다', () => {
+    render(<PerspectiveAxesView points={PERSPECTIVE_POINTS} />);
+
+    expect(screen.queryByText(/내 투표/)).not.toBeInTheDocument();
+  });
+
+  it('안내 문구를 넘기면 카드 상단에 보여준다', () => {
+    render(<PerspectiveAxesView points={PERSPECTIVE_POINTS} noticeText="내 투표 7개 기준" />);
+
+    expect(screen.getByText('내 투표 7개 기준')).toBeInTheDocument();
+  });
+});
+
+const EMPTY_ECONOMY: PerspectivePoint = {
+  axis: PerspectiveAxis.ECONOMY,
+  leftLabel: '시장 중심',
+  rightLabel: '정부 역할',
+  value: null,
+  voteCount: 0,
+};
+
+describe('PerspectiveAxesView 표가 없는 축', () => {
+  it('마커 없이 트랙만 그리고 안내 문구를 붙인다', () => {
+    render(<PerspectiveAxesView points={[EMPTY_ECONOMY]} />);
+
+    const meter = screen.getByRole('meter');
+
+    expect(meter.firstElementChild).toBeNull();
+    expect(meter).not.toHaveAttribute('aria-valuenow');
+    expect(screen.getByText(EMPTY_AXIS_NOTICE)).toBeInTheDocument();
+  });
+
+  it('스크린 리더에도 값 대신 안내를 읽어 준다', () => {
+    render(<PerspectiveAxesView points={[EMPTY_ECONOMY]} />);
+
+    expect(
+      screen.getByRole('meter', {
+        name: `경제: 시장 중심과 정부 역할 사이 ${EMPTY_AXIS_NOTICE}`,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('값이 있는 축은 그대로 마커를 그린다', () => {
+    render(
+      <PerspectiveAxesView points={[EMPTY_ECONOMY, { ...EMPTY_ECONOMY, axis: PerspectiveAxis.LABOR, leftLabel: '기업 중심', rightLabel: '노동자 중심', value: 80, voteCount: 4 }]} />,
+    );
+
+    expect(screen.getAllByText(EMPTY_AXIS_NOTICE)).toHaveLength(1);
   });
 });

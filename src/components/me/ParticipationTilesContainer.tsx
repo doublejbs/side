@@ -7,7 +7,8 @@ import { useUserVotes } from '@/store/useUserVotes';
 import styles from './ParticipationTilesContainer.module.css';
 
 interface Props {
-  readEvidenceCount: number;
+  /** 내가 주장에 남긴 근거 피드백 수. 서버 모드에서는 `GET /api/me/perspective` 가 준 값이다. */
+  feedbackCount: number;
   changedCount: number;
   /** 서버 저장이 켜져 있는지. 페이지(서버 컴포넌트)가 알려준다. */
   isServerEnabled?: boolean;
@@ -19,7 +20,7 @@ interface Props {
  * 비로그인이면 집계가 없으므로 0 이다.
  */
 export const ParticipationTilesContainer = ({
-  readEvidenceCount,
+  feedbackCount,
   changedCount,
   isServerEnabled = false,
 }: Props) => {
@@ -35,7 +36,7 @@ export const ParticipationTilesContainer = ({
   return (
     <ParticipationTilesView
       votedCount={votedCount}
-      readEvidenceCount={readEvidenceCount}
+      feedbackCount={feedbackCount}
       changedCount={changedCount}
     />
   );

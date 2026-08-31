@@ -4,6 +4,7 @@ import { AdminSectionView } from '@/components/admin/AdminSectionView';
 import { AdminTextAreaFieldView } from '@/components/admin/AdminTextAreaFieldView';
 import { ClaimEditorListView } from '@/components/admin/ClaimEditorListView';
 import { IssueActionBarView } from '@/components/admin/IssueActionBarView';
+import { IssueAxesEditorContainer } from '@/components/admin/IssueAxesEditorContainer';
 import { IssueBasicFieldsView } from '@/components/admin/IssueBasicFieldsView';
 import { IssueClassificationCardView } from '@/components/admin/IssueClassificationCardView';
 import { IssueMergeFormView } from '@/components/admin/IssueMergeFormView';
@@ -87,6 +88,8 @@ export const IssueReviewFormView = ({
       summary={issue.summary}
       keyPoints={issue.keyPoints}
     />
+
+    <IssueAxesEditorContainer axes={issue.axes} />
 
     <ClaimEditorListView
       claims={issue.claims}

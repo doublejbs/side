@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
 
 import { MeHeaderView } from '@/components/me/MeHeaderView';
-import type { MeOpinionChangeItem } from '@/components/me/MePageContainer';
 import { MePageContainer } from '@/components/me/MePageContainer';
 import { getIssueRepository } from '@/data/getIssueRepository';
 import { OPINION_CHANGES, PARTICIPATION_SUMMARY, PERSPECTIVE_POINTS } from '@/data/perspectiveData';
+import type { MyOpinionChange } from '@/domain/MyPerspective';
 import { buildLoginHref } from '@/lib/auth/buildLoginHref';
 import { isAuthEnabled } from '@/lib/auth/isAuthEnabled';
 import { isServerVoteEnabled } from '@/server/isServerVoteEnabled';
@@ -23,8 +23,11 @@ export const metadata: Metadata = {
   title: '나 · SIDE',
 };
 
-/** `OpinionChange.issueId` 는 이슈의 slug 다. 목 데이터는 id 와 slug 가 같다. */
-const buildOpinionChangeItems = async (): Promise<MeOpinionChangeItem[]> => {
+/**
+ * 목 의견 변화를 서버 계산과 같은 모양(`MyOpinionChange`)으로 맞춘다.
+ * `OpinionChange.issueId` 는 이슈의 slug 다(목 데이터는 id 와 slug 가 같다).
+ */
+const buildMockOpinionChanges = async (): Promise<MyOpinionChange[]> => {
   const repository = getIssueRepository();
   const items = await Promise.all(
     OPINION_CHANGES.map(async (change) => {
@@ -37,7 +40,17 @@ const buildOpinionChangeItems = async (): Promise<MeOpinionChangeItem[]> => {
       // 이슈를 이미 읽었으므로 주장은 같은 결과에서 찾는다(같은 이슈를 두 번 조회하지 않는다).
       const claim = issue.claims.find((item) => item.id === change.persuadedByClaimId);
 
-      return [{ change, question: issue.question, persuadedClaimTitle: claim?.title ?? '' }];
+      return [
+        {
+          slug: change.issueId,
+          question: issue.question,
+          before: change.before.choice,
+          beforeAt: change.before.votedAt,
+          after: change.after.choice,
+          afterAt: change.after.votedAt,
+          persuadedClaimTitle: claim?.title ?? null,
+        },
+      ];
     }),
   );
 
@@ -45,17 +58,17 @@ const buildOpinionChangeItems = async (): Promise<MeOpinionChangeItem[]> => {
 };
 
 const MePage = async () => {
-  const opinionChangeItems = await buildOpinionChangeItems();
+  const opinionChanges = await buildMockOpinionChanges();
   const loginHref = buildLoginHref('/me');
 
   return (
     <main className={styles.page}>
       <MeHeaderView isAuthEnabled={isAuthEnabled()} loginHref={loginHref} />
       <MePageContainer
-        opinionChangeItems={opinionChangeItems}
+        opinionChanges={opinionChanges}
         perspectivePoints={PERSPECTIVE_POINTS}
         patternIssueCount={PARTICIPATION_SUMMARY.patternIssueCount}
-        readEvidenceCount={PARTICIPATION_SUMMARY.readEvidenceCount}
+        feedbackCount={PARTICIPATION_SUMMARY.readEvidenceCount}
         loginHref={loginHref}
         isServerEnabled={isServerVoteEnabled()}
       />

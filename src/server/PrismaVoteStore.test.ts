@@ -1,7 +1,9 @@
 import type { PrismaClient } from '@prisma/client';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { AxisDirection } from '@/domain/AxisDirection';
 import { ClaimFeedback } from '@/domain/ClaimFeedback';
+import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
 import { VoteChoice } from '@/domain/VoteChoice';
 import { PrismaVoteStore } from '@/server/PrismaVoteStore';
 
@@ -24,6 +26,8 @@ interface FakeFeedbackRow {
   anonId: string | null;
   userId: string | null;
   feedback: string;
+  /** 먼저 남긴 순서를 재현할 때만 채운다. */
+  createdAt?: Date;
 }
 
 interface FakeIssueRow {
@@ -31,6 +35,25 @@ interface FakeIssueRow {
   /** 아직 발행되지 않은 이슈는 slug 가 없다. */
   slug: string | null;
   status: string;
+  question?: string;
+  /** IssueAxis[]. 축이 정해지지 않았으면 없다. */
+  axes?: unknown;
+}
+
+/** 투표 이력 한 건. `castVote` 가 신규·변경일 때만 만든다. */
+interface FakeVoteEventRow {
+  id: string;
+  issueId: string;
+  userId: string;
+  choice: string;
+  createdAt: Date;
+}
+
+/** 의견 변화에 붙일 주장 제목을 찾기 위한 최소 주장 행. */
+interface FakeClaimRow {
+  id: string;
+  issueId: string;
+  title: string;
 }
 
 interface UniqueVoteWhere {
@@ -52,10 +75,18 @@ interface VoteWhere extends OwnerWhere {
   issue?: { status: string };
 }
 
+/** 근거 피드백 조회는 판정 종류로도 거른다. */
+interface FeedbackWhere extends OwnerWhere {
+  claimId?: string;
+  feedback?: string;
+}
+
 interface FakeDatabase {
   issues: FakeIssueRow[];
   claimIds: string[];
+  claims: FakeClaimRow[];
   votes: FakeVoteRow[];
+  voteEvents: FakeVoteEventRow[];
   feedbacks: FakeFeedbackRow[];
 }
 
@@ -101,7 +132,15 @@ const matchesIssue = (
 };
 
 const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}) => {
-  const db: FakeDatabase = { issues: [], claimIds: [], votes: [], feedbacks: [], ...seed };
+  const db: FakeDatabase = {
+    issues: [],
+    claimIds: [],
+    claims: [],
+    votes: [],
+    voteEvents: [],
+    feedbacks: [],
+    ...seed,
+  };
 
   let shouldFailUpsert = options.failNextVoteUpsert ?? false;
   let sequence = 0;
@@ -199,10 +238,12 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
       findMany: async ({
         where,
         include,
+        select,
         orderBy,
       }: {
         where: VoteWhere;
         include?: { issue: { select: { slug: true } } };
+        select?: { choice?: true; issue?: { select: { axes?: true } } };
         orderBy?: { updatedAt: 'asc' | 'desc' };
       }) => {
         const rows = db.votes.filter(
@@ -217,12 +258,16 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
           );
         }
 
-        return rows.map((vote) => ({
-          ...vote,
-          ...(include
-            ? { issue: { slug: db.issues.find((issue) => issue.id === vote.issueId)?.slug ?? null } }
-            : {}),
-        }));
+        return rows.map((vote) => {
+          const issue = db.issues.find((row) => row.id === vote.issueId);
+
+          // 관점 계산은 이슈의 축까지 함께 고른다. 나머지 select 는 행 전체로도 충분하다.
+          if (select?.issue) {
+            return { choice: vote.choice, issue: { axes: issue?.axes ?? null } };
+          }
+
+          return { ...vote, ...(include ? { issue: { slug: issue?.slug ?? null } } : {}) };
+        });
       },
       updateMany: async ({
         where,
@@ -257,6 +302,44 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
         }));
       },
     },
+    voteEvent: {
+      create: async ({ data }: { data: { issueId: string; userId: string; choice: string } }) => {
+        const row: FakeVoteEventRow = { id: nextId('event'), ...data, createdAt: nextUpdatedAt() };
+
+        db.voteEvents.push(row);
+
+        return { ...row };
+      },
+      findMany: async ({
+        where,
+      }: {
+        where: { userId: string; issue?: { status: string } };
+        select?: unknown;
+        orderBy?: { createdAt: 'asc' | 'desc' };
+      }) => {
+        const rows = db.voteEvents.filter((event) => {
+          const issue = db.issues.find((row) => row.id === event.issueId);
+
+          return (
+            event.userId === where.userId &&
+            (!where.issue || issue?.status === where.issue.status)
+          );
+        });
+
+        return [...rows]
+          .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+          .map((event) => {
+            const issue = db.issues.find((row) => row.id === event.issueId);
+
+            return {
+              issueId: event.issueId,
+              choice: event.choice,
+              createdAt: event.createdAt,
+              issue: { slug: issue?.slug ?? null, question: issue?.question ?? null },
+            };
+          });
+      },
+    },
     claimFeedbackRecord: {
       upsert: async ({
         where,
@@ -275,7 +358,12 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
           return { ...existing };
         }
 
-        const row: FakeFeedbackRow = { id: nextId('feedback'), ...create, anonId: null };
+        const row: FakeFeedbackRow = {
+          id: nextId('feedback'),
+          ...create,
+          anonId: null,
+          createdAt: nextUpdatedAt(),
+        };
 
         db.feedbacks.push(row);
 
@@ -299,8 +387,35 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
 
         return found ? { feedback: found.feedback } : null;
       },
-      findMany: async ({ where }: { where: OwnerWhere }) =>
-        db.feedbacks.filter((record) => matchesOwner(record, where)).map((record) => ({ ...record })),
+      findMany: async ({
+        where,
+        select,
+      }: {
+        where: FeedbackWhere;
+        select?: { claim: { select: { issueId: true; title: true } } };
+        orderBy?: { createdAt: 'asc' | 'desc' };
+      }) => {
+        const rows = db.feedbacks
+          .filter(
+            (record) =>
+              matchesOwner(record, where) &&
+              (where.feedback === undefined || record.feedback === where.feedback),
+          )
+          .sort((left, right) => (left.createdAt?.getTime() ?? 0) - (right.createdAt?.getTime() ?? 0));
+
+        // 의견 변화는 주장 제목까지 함께 고른다. 나머지 select 는 행 전체로도 충분하다.
+        if (!select?.claim) {
+          return rows.map((record) => ({ ...record }));
+        }
+
+        return rows.map((record) => {
+          const claim = db.claims.find((row) => row.id === record.claimId);
+
+          return { claim: { issueId: claim?.issueId ?? '', title: claim?.title ?? '' } };
+        });
+      },
+      count: async ({ where }: { where: FeedbackWhere }) =>
+        db.feedbacks.filter((record) => matchesOwner(record, where)).length,
       updateMany: async ({
         where,
         data,
@@ -317,7 +432,9 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
     },
     claim: {
       findUnique: async ({ where }: { where: { id: string } }) =>
-        db.claimIds.includes(where.id) ? { id: where.id } : null,
+        db.claimIds.includes(where.id) || db.claims.some((claim) => claim.id === where.id)
+          ? { id: where.id }
+          : null,
     },
     $transaction: async (run: (tx: unknown) => Promise<unknown>) => run(prisma),
   };
@@ -326,10 +443,22 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
 };
 
 const ISSUES: FakeIssueRow[] = [
-  { id: 'issue-1', slug: 'work-week-4-5', status: 'PUBLISHED' },
-  { id: 'issue-2', slug: 'draft-issue', status: 'REVIEW' },
+  {
+    id: 'issue-1',
+    slug: 'work-week-4-5',
+    status: 'PUBLISHED',
+    question: '주 4.5일제를 도입해야 할까?',
+    axes: [{ axis: 'LABOR', agreeDirection: 'RIGHT' }],
+  },
+  { id: 'issue-2', slug: 'draft-issue', status: 'REVIEW', question: '아직 검수 중인 질문?' },
   { id: 'issue-3', slug: null, status: 'REVIEW' },
-  { id: 'issue-4', slug: 'ai-regulation', status: 'PUBLISHED' },
+  {
+    id: 'issue-4',
+    slug: 'ai-regulation',
+    status: 'PUBLISHED',
+    question: 'AI 규제를 강화해야 할까?',
+    axes: [{ axis: 'ECONOMY', agreeDirection: 'RIGHT' }],
+  },
   /** 발행됐지만 slug 가 비어 있는 예외 상황(스키마상 slug 는 선택 값이다). */
   { id: 'issue-5', slug: null, status: 'PUBLISHED' },
 ];
@@ -391,10 +520,12 @@ describe('PrismaVoteStore', () => {
   it('유니크 제약이 아닌 오류는 그대로 올린다', async () => {
     const broken = {
       vote: {
+        findUnique: async () => null,
         upsert: async () => {
           throw new Error('연결 실패');
         },
       },
+      $transaction: async (run: (tx: unknown) => Promise<unknown>) => run(broken),
     } as unknown as PrismaClient;
 
     await expect(
@@ -557,5 +688,117 @@ describe('PrismaVoteStore 익명 레코드 이전', () => {
     });
     expect(fake.db.votes[0].anonId).toBe('anon-1');
     expect(fake.db.feedbacks[0].anonId).toBe('anon-1');
+  });
+});
+
+describe('PrismaVoteStore 투표 이력·관점', () => {
+  let fake: ReturnType<typeof createFakePrisma>;
+  let store: PrismaVoteStore;
+
+  beforeEach(() => {
+    fake = createFakePrisma({
+      issues: ISSUES,
+      claims: [
+        { id: 'claim-1', issueId: 'issue-1', title: '노동시간이 줄어든다' },
+        { id: 'claim-2', issueId: 'issue-1', title: '기업 비용이 늘어난다' },
+      ],
+    });
+    store = new PrismaVoteStore(fake.prisma);
+  });
+
+  it('신규 투표와 선택 변경만 이력으로 남긴다', async () => {
+    await store.castVote('issue-1', 'user-1', VoteChoice.AGREE);
+    await store.castVote('issue-1', 'user-1', VoteChoice.AGREE);
+    await store.castVote('issue-1', 'user-1', VoteChoice.DISAGREE);
+
+    expect(fake.db.voteEvents.map((event) => event.choice)).toEqual([
+      VoteChoice.AGREE,
+      VoteChoice.DISAGREE,
+    ]);
+  });
+
+  it('발행된 이슈의 이력만 오래된 순으로 돌려준다', async () => {
+    await store.castVote('issue-1', 'user-1', VoteChoice.AGREE);
+    await store.castVote('issue-2', 'user-1', VoteChoice.AGREE);
+    await store.castVote('issue-1', 'user-1', VoteChoice.DISAGREE);
+    await store.castVote('issue-1', 'user-2', VoteChoice.UNSURE);
+
+    const rows = await store.listMyVoteEvents('user-1');
+
+    expect(rows).toEqual([
+      {
+        issueId: 'issue-1',
+        issueSlug: 'work-week-4-5',
+        question: '주 4.5일제를 도입해야 할까?',
+        choice: VoteChoice.AGREE,
+        createdAt: expect.any(String),
+      },
+      {
+        issueId: 'issue-1',
+        issueSlug: 'work-week-4-5',
+        question: '주 4.5일제를 도입해야 할까?',
+        choice: VoteChoice.DISAGREE,
+        createdAt: expect.any(String),
+      },
+    ]);
+    expect(Date.parse(rows[0].createdAt)).toBeLessThan(Date.parse(rows[1].createdAt));
+  });
+
+  it('익명 표를 계정으로 옮길 때는 이력을 만들지 않는다', async () => {
+    fake.db.votes.push({
+      id: 'vote-anon',
+      issueId: 'issue-1',
+      anonId: 'anon-1',
+      userId: null,
+      choice: VoteChoice.AGREE,
+      updatedAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+
+    await store.claimAnonRecords('anon-1', 'user-1');
+
+    expect(fake.db.voteEvents).toEqual([]);
+    expect(await store.listMyVoteEvents('user-1')).toEqual([]);
+  });
+
+  it('설득됐어요 를 남긴 주장만 먼저 남긴 순서로 돌려준다', async () => {
+    await store.setClaimFeedback('claim-2', 'user-1', ClaimFeedback.PERSUADED);
+    await store.setClaimFeedback('claim-1', 'user-1', ClaimFeedback.PERSUADED);
+    await store.setClaimFeedback('claim-1', 'user-2', ClaimFeedback.PERSUADED);
+
+    expect(await store.listMyPersuadedClaims('user-1')).toEqual([
+      { issueId: 'issue-1', claimTitle: '기업 비용이 늘어난다' },
+      { issueId: 'issue-1', claimTitle: '노동시간이 줄어든다' },
+    ]);
+  });
+
+  it('근거 피드백 수는 판정 종류를 가리지 않고 센다', async () => {
+    await store.setClaimFeedback('claim-1', 'user-1', ClaimFeedback.PERSUADED);
+    await store.setClaimFeedback('claim-2', 'user-1', ClaimFeedback.LACKS_EVIDENCE);
+    await store.setClaimFeedback('claim-1', 'user-2', ClaimFeedback.PERSUADED);
+
+    expect(await store.countMyClaimFeedbacks('user-1')).toBe(2);
+    expect(await store.countMyClaimFeedbacks('user-9')).toBe(0);
+  });
+
+  it('발행된 이슈의 내 최신 표를 축과 함께 돌려준다', async () => {
+    await store.castVote('issue-1', 'user-1', VoteChoice.AGREE);
+    await store.castVote('issue-4', 'user-1', VoteChoice.DISAGREE);
+    await store.castVote('issue-2', 'user-1', VoteChoice.AGREE);
+    await store.castVote('issue-5', 'user-1', VoteChoice.AGREE);
+
+    const rows = await store.listMyVoteAxes('user-1');
+
+    expect(rows).toEqual([
+      {
+        axes: [{ axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT }],
+        choice: VoteChoice.AGREE,
+      },
+      {
+        axes: [{ axis: PerspectiveAxis.ECONOMY, agreeDirection: AxisDirection.RIGHT }],
+        choice: VoteChoice.DISAGREE,
+      },
+      // 축이 없는 이슈(issue-5)도 표는 돌려주되 어느 축에도 쌓이지 않는다.
+      { axes: [], choice: VoteChoice.AGREE },
+    ]);
   });
 });

@@ -1,6 +1,8 @@
+import { AxisDirection } from '@/domain/AxisDirection';
 import { ClaimSide } from '@/domain/ClaimSide';
 import { EvidenceType } from '@/domain/EvidenceType';
 import { MediaLeaning } from '@/domain/MediaLeaning';
+import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
 import type { Issue } from '@/domain/Issue';
 
 export const workWeekIssue: Issue = {
@@ -8,6 +10,7 @@ export const workWeekIssue: Issue = {
   slug: 'work-week-4-5',
   question: '주 4.5일제를 도입해야 할까?',
   tags: ['노동', '경제'],
+  axes: [{ axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT }],
   participantCount: 12481,
   distribution: { agree: 57, disagree: 31, unsure: 12 },
   summary: [

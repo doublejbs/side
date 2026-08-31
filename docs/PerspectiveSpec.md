@@ -13,7 +13,9 @@
   ```
 - 축 정의(고정, `src/domain/perspectiveAxisLabels.ts`): 경제(시장 중심|정부 역할), 복지(개인 책임|사회 책임), 노동(기업 중심|노동자 중심), 환경(성장|환경), 외교(현실주의|이상주의). LEFT=왼쪽 라벨.
 - 생성: `classify`(nano) 출력에 `axes` 추가 — "이 질문에 찬성하는 것이 어느 축의 어느 방향인지, 해당 없으면 빈 배열. 확신 없으면 넣지 않는다." zod: 축 중복 금지.
+  - 구현: `ClassifySchema.axes`(길이 ≤ `MAX_ISSUE_AXES`, 축 중복 refine) · `ClassifyPrompt.PERSPECTIVE_AXIS_DEFINITIONS`(축 코드와 좌우 라벨을 그대로 제시) · `classifyIssues.applyClassification`(`Issue.axes` 에 저장하고 분류 Json 에도 함께 남김) · `DryRunClients` 는 축을 지어내지 않도록 빈 배열.
 - 검수: 관리자 검수 폼에 축 편집(축 select + 방향 select, 최대 2행). 승인 전 확인 대상.
+  - 구현: `IssueAxesEditorContainer`(선택 상태) → `IssueAxesEditorView` → `IssueAxisRowView`. 필드 이름은 `axis-{index}-axis` · `axis-{index}-direction`(`issueAxisFields.ts`), 방향 선택지 라벨은 고른 축의 실제 좌우 라벨을 따라간다. `AdminActions.parseIssueForm` 이 읽어 `saveIssue` 로 저장하고, 미지정·중복 축 정리는 `saveIssue` 가 맡는다.
 - 시드 5이슈 수동 지정: 주4.5일제(노동, AGREE→RIGHT 노동자 중심), 원전(환경, AGREE→LEFT 성장), 정년연장(노동, AGREE→RIGHT), AI규제(경제, AGREE→RIGHT 정부 역할), 보유세(경제, AGREE→RIGHT / 복지, AGREE→RIGHT 사회 책임).
 
 ## 2. 투표 변경 이력
@@ -51,6 +53,7 @@ interface MyOpinionChange { slug: string; question: string; before: VoteChoice; 
   - 참여 타일: 투표한 이슈(기존 `useMyVotes`), **근거 피드백**(`feedbackCount` — 기존 "읽은 근거 42" 대체, 라벨 변경), 바뀐 생각(`changes.length`).
 - 비로그인·목 모드: 기존 동작(목 데이터) 유지.
 - 발견 탭은 이번 범위 밖.
+- 구현: `PerspectiveCache` + `useMyPerspective(isServerEnabled)`(MyVotesCache 패턴 — 401 세션 무효화, 실패 시 재시도·기존 값 보존, 요청 순번). `VoteApiClient` 는 투표·근거 피드백 성공 시 `invalidateMyVotes` 와 함께 `invalidateMyPerspective` 를 부른다. 화면 조립은 `useMePageState`(서버 계산이 오기 전에는 목 값을 비추지 않는다) → `MePageContainer`, 빈 변화는 `OpinionChangeEmptyView`, 값이 null 인 축은 `PerspectiveAxesView` 가 마커 없이 그린다.
 
 ## 6. 테스트
 

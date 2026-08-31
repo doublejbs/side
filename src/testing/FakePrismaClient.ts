@@ -53,6 +53,8 @@ export interface FakeIssueRow {
   slug: string | null;
   question: string;
   tags: string[];
+  /** IssueAxis[]. 아직 축이 정해지지 않았으면 null. */
+  axes: unknown;
   summary: string[];
   keyPoints: unknown;
   commonCoverage: string[];
@@ -164,6 +166,7 @@ export const createFakeIssueRow = (overrides: Partial<FakeIssueRow> & { id: stri
   slug: null,
   question: '(미정)',
   tags: [],
+  axes: null,
   summary: [],
   keyPoints: [],
   commonCoverage: [],

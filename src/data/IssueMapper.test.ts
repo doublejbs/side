@@ -2,16 +2,19 @@ import { describe, expect, it } from 'vitest';
 
 import { mapIssueRow } from '@/data/IssueMapper';
 import type { IssueAggregates, IssueRow } from '@/data/IssueMapper';
+import { AxisDirection } from '@/domain/AxisDirection';
 import { ClaimSide } from '@/domain/ClaimSide';
 import { EvidenceSupport } from '@/domain/EvidenceSupport';
 import { EvidenceType } from '@/domain/EvidenceType';
 import { MediaLeaning } from '@/domain/MediaLeaning';
+import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
 
 const createRow = (overrides: Partial<IssueRow> = {}): IssueRow => ({
   id: 'issue-1',
   slug: 'work-week-4-5',
   question: '주 4.5일제를 도입해야 할까?',
   tags: ['노동', '경제'],
+  axes: [{ axis: 'LABOR', agreeDirection: 'RIGHT' }],
   summary: ['첫 문장이다.', '둘째 문장이다.', '셋째 문장이다.'],
   keyPoints: [{ id: 'kp-1', title: '노동시간', question: '얼마나 줄어드는가?' }],
   commonCoverage: ['국회 논의가 시작됐다.', '업종별 적용 범위가 쟁점이다.'],
@@ -203,5 +206,29 @@ describe('mapIssueRow', () => {
     expect(issue.keyPoints).toEqual([]);
     expect(issue.mediaPerspectives).toEqual([]);
     expect(issue.opinionGroups).toEqual([]);
+  });
+});
+
+describe('mapIssueRow · axes', () => {
+  it('저장된 관점 축을 그대로 옮긴다', () => {
+    expect(mapIssueRow(createRow(), createAggregates()).axes).toEqual([
+      { axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT },
+    ]);
+  });
+
+  it('축이 없거나 형식이 어긋나면 빈 배열로 떨어뜨린다', () => {
+    expect(mapIssueRow(createRow({ axes: null }), createAggregates()).axes).toEqual([]);
+    expect(mapIssueRow(createRow({ axes: [{ axis: '노동' }] }), createAggregates()).axes).toEqual([]);
+    expect(
+      mapIssueRow(
+        createRow({
+          axes: [
+            { axis: 'LABOR', agreeDirection: 'RIGHT' },
+            { axis: 'LABOR', agreeDirection: 'LEFT' },
+          ],
+        }),
+        createAggregates(),
+      ).axes,
+    ).toEqual([]);
   });
 });

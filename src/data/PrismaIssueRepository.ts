@@ -18,6 +18,7 @@ const ISSUE_SELECT = {
   slug: true,
   question: true,
   tags: true,
+  axes: true,
   summary: true,
   keyPoints: true,
   commonCoverage: true,

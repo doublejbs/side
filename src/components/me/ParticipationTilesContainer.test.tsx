@@ -19,7 +19,7 @@ const MY_VOTES: MyVote[] = [
 const renderContainer = (isServerEnabled: boolean) =>
   render(
     <ParticipationTilesContainer
-      readEvidenceCount={7}
+      feedbackCount={7}
       changedCount={5}
       isServerEnabled={isServerEnabled}
     />,
@@ -48,6 +48,8 @@ describe('ParticipationTilesContainer', () => {
     expect(useMyVotesMock).toHaveBeenCalledWith(true);
     expect(screen.getByText('투표한 이슈')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('근거 피드백')).toBeInTheDocument();
+    expect(screen.getByText('7')).toBeInTheDocument();
   });
 
   it('비로그인이라 집계가 없으면 0 이다', () => {

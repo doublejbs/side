@@ -43,3 +43,18 @@
   box-shadow: 0 0 0 1px var(--color-line);
   transform: translateX(-50%);
 }
+
+/* 카드 상단 안내. 축 목록보다 앞서므로 아래 여백만 준다. */
+.notice {
+  margin-bottom: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+/* 표가 없어 마커를 그릴 수 없는 축의 안내. */
+.emptyAxis {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-muted);
+}

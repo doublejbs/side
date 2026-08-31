@@ -1,4 +1,5 @@
 import {
+  issueAxesSchema,
   keyPointsSchema,
   mediaPerspectivesSchema,
   opinionGroupsSchema,
@@ -19,6 +20,7 @@ import type {
   OpinionGroup,
   VoteDistribution,
 } from '@/domain/Issue';
+import type { IssueAxis } from '@/domain/IssueAxis';
 
 /** Prisma `Evidence` 행에서 도메인 변환에 필요한 부분. */
 export interface EvidenceRow {
@@ -49,6 +51,8 @@ export interface IssueRow {
   slug: string | null;
   question: string;
   tags: string[];
+  /** IssueAxis[]. 아직 축이 정해지지 않았으면 null. */
+  axes: unknown;
   summary: string[];
   keyPoints: unknown;
   commonCoverage: string[];
@@ -94,6 +98,12 @@ const parseKeyPoints = (value: unknown): KeyPoint[] => {
 
 const parseMediaPerspectives = (value: unknown): MediaPerspective[] => {
   const parsed = mediaPerspectivesSchema.safeParse(value);
+
+  return parsed.success ? parsed.data : [];
+};
+
+const parseIssueAxes = (value: unknown): IssueAxis[] => {
+  const parsed = issueAxesSchema.safeParse(value);
 
   return parsed.success ? parsed.data : [];
 };
@@ -157,6 +167,7 @@ export const mapIssueRow = (row: IssueRow, aggregates: IssueAggregates): Issue =
     slug: row.slug ?? row.id,
     question: row.question,
     tags: row.tags,
+    axes: parseIssueAxes(row.axes),
     participantCount: aggregates.participantCount,
     distribution: aggregates.distribution,
     summary: row.summary,

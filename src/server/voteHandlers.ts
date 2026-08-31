@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import { aggregateVotes } from '@/data/voteAggregation';
 import { ClaimFeedback } from '@/domain/ClaimFeedback';
+import { computePerspective } from '@/domain/computePerspective';
+import type { MyOpinionChange, MyPerspectiveResponse } from '@/domain/MyPerspective';
 import type { MyVote } from '@/domain/MyVote';
 import type { SessionUser } from '@/domain/SessionUser';
 import { VoteChoice } from '@/domain/VoteChoice';
@@ -11,7 +13,10 @@ import type {
   VoteResultResponse,
 } from '@/domain/VoteApiTypes';
 import { VoteApiErrorCode } from '@/server/VoteApiErrorCode';
-import type { MyVoteRow, VoteStore } from '@/server/VoteStore';
+import type { MyPersuadedClaimRow, MyVoteEventRow, MyVoteRow, VoteStore } from '@/server/VoteStore';
+
+/** "나" 탭이 보여주는 의견 변화 개수 상한. 근거: docs/PerspectiveSpec.md 4장. */
+const MAX_OPINION_CHANGES = 5;
 
 /** 라우트 파일이 그대로 `Response` 로 옮겨 담는 결과. */
 export interface HandlerResponse {
@@ -171,4 +176,88 @@ export const handleClaimFeedback = async ({
   };
 
   return { status: 200, body: responseBody };
+};
+
+/** 화면이 질문·링크를 그려야 하므로 slug 나 질문이 비어 있는 이력은 뺀다. */
+const isRenderableEvent = (
+  event: MyVoteEventRow,
+): event is MyVoteEventRow & { issueSlug: string; question: string } =>
+  event.issueSlug !== null && event.question !== null;
+
+/** 이슈별 첫 '설득됐어요' 주장 제목. 같은 이슈에 여러 건이면 먼저 남긴 것을 쓴다. */
+const toPersuadedTitleByIssueId = (rows: MyPersuadedClaimRow[]): Map<string, string> => {
+  const titleByIssueId = new Map<string, string>();
+
+  rows.forEach((row) => {
+    if (titleByIssueId.has(row.issueId)) {
+      return;
+    }
+
+    titleByIssueId.set(row.issueId, row.claimTitle);
+  });
+
+  return titleByIssueId;
+};
+
+/**
+ * 같은 이슈의 연속된 두 이력에서 선택이 바뀐 쌍만 골라 최신순으로 자른다.
+ * 이력은 오래된 순으로 들어오므로 뒤에서부터가 최신이다. 근거: docs/PerspectiveSpec.md 4장.
+ */
+const buildOpinionChanges = (
+  events: MyVoteEventRow[],
+  persuadedClaims: MyPersuadedClaimRow[],
+): MyOpinionChange[] => {
+  const persuadedTitleByIssueId = toPersuadedTitleByIssueId(persuadedClaims);
+  const previousByIssueId = new Map<string, MyVoteEventRow & { issueSlug: string }>();
+  const changes: MyOpinionChange[] = [];
+
+  events.filter(isRenderableEvent).forEach((event) => {
+    const previous = previousByIssueId.get(event.issueId);
+
+    previousByIssueId.set(event.issueId, event);
+
+    if (!previous || previous.choice === event.choice) {
+      return;
+    }
+
+    changes.push({
+      slug: event.issueSlug,
+      question: event.question,
+      before: previous.choice,
+      beforeAt: previous.createdAt,
+      after: event.choice,
+      afterAt: event.createdAt,
+      persuadedClaimTitle: persuadedTitleByIssueId.get(event.issueId) ?? null,
+    });
+  });
+
+  return changes.reverse().slice(0, MAX_OPINION_CHANGES);
+};
+
+/**
+ * `GET /api/me/perspective` — 내 표로 계산한 관점 축·의견 변화·근거 피드백 수.
+ * 서버는 축 값을 저장하지 않고 요청 시 계산만 한다. 근거: docs/PerspectiveSpec.md 3장·4장.
+ */
+export const handleMyPerspective = async ({
+  store,
+  sessionUser,
+}: BaseDeps): Promise<HandlerResponse> => {
+  if (!sessionUser) {
+    return loginRequiredResponse();
+  }
+
+  const [voteAxes, events, persuadedClaims, feedbackCount] = await Promise.all([
+    store.listMyVoteAxes(sessionUser.id),
+    store.listMyVoteEvents(sessionUser.id),
+    store.listMyPersuadedClaims(sessionUser.id),
+    store.countMyClaimFeedbacks(sessionUser.id),
+  ]);
+
+  const body: MyPerspectiveResponse = {
+    points: computePerspective(voteAxes),
+    changes: buildOpinionChanges(events, persuadedClaims),
+    feedbackCount,
+  };
+
+  return { status: 200, body };
 };
