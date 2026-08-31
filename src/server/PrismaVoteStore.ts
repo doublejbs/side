@@ -104,13 +104,13 @@ export class PrismaVoteStore implements VoteStore {
 
   async listMyVotes(userId: string): Promise<MyVoteRow[]> {
     const rows = await this.prisma.vote.findMany({
-      where: { userId },
+      // 아직 발행되지 않은 이슈의 표는 화면이 가리킬 수 없으므로 애초에 빼고 읽는다.
+      where: { userId, issue: { status: IssueStatus.PUBLISHED } },
       include: { issue: { select: { slug: true } } },
       orderBy: { updatedAt: 'desc' },
     });
 
     return rows.map((row) => ({
-      issueId: row.issueId,
       issueSlug: row.issue.slug,
       choice: toDomainVoteChoice(row.choice),
       votedAt: row.updatedAt.toISOString(),

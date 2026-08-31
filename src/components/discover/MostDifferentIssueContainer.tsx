@@ -14,6 +14,8 @@ import { useMyVotes } from '@/store/useMyVotes';
 import { useSessionUser } from '@/store/useSessionUser';
 import { useUserVotes } from '@/store/useUserVotes';
 
+import styles from './MostDifferentIssueContainer.module.css';
+
 interface Props {
   candidates: IssueSummary[];
   /** 비로그인이라 내 투표를 쓸 수 없을 때의 로그인 경로. 서버가 계산해 넘긴다. */
@@ -32,7 +34,7 @@ export const MostDifferentIssueContainer = ({
   isServerEnabled = false,
 }: Props) => {
   const { user, isLoaded } = useSessionUser();
-  const { votes: myVotes } = useMyVotes();
+  const { votes: myVotes, isLoaded: isMyVotesLoaded } = useMyVotes(isServerEnabled);
   const localVotes = useUserVotes();
   const choiceBySlug = useMemo(
     () =>
@@ -50,6 +52,11 @@ export const MostDifferentIssueContainer = ({
   // 세션은 클라이언트에서 읽는다(공개 화면 정적 렌더 유지). 판정이 끝난 뒤에만 안내로 바꾼다.
   if (isAuthEnabled() && isLoaded && !user) {
     return <MostDifferentIssueView issue={null} myChoice={null} loginHref={loginHref} />;
+  }
+
+  // 서버 집계가 오기 전에 "투표한 이슈가 없다" 고 단정하지 않는다.
+  if (isServerEnabled && !isMyVotesLoaded) {
+    return <div className={styles.placeholder} aria-busy="true" />;
   }
 
   return <MostDifferentIssueView issue={issue} myChoice={myChoice} />;

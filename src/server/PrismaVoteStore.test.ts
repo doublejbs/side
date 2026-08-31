@@ -47,6 +47,11 @@ interface OwnerWhere {
   userId?: string | null;
 }
 
+/** 투표 조회는 소유자 조건에 더해 이슈 관계 조건(`issue: { status }`)을 쓴다. */
+interface VoteWhere extends OwnerWhere {
+  issue?: { status: string };
+}
+
 interface FakeDatabase {
   issues: FakeIssueRow[];
   claimIds: string[];
@@ -80,6 +85,19 @@ const matchesOwner = (
   }
 
   return true;
+};
+
+/** `where.issue` 관계 조건(발행 상태)을 만족하는지 본다. */
+const matchesIssue = (
+  issues: FakeIssueRow[],
+  vote: FakeVoteRow,
+  where: VoteWhere,
+): boolean => {
+  if (!where.issue) {
+    return true;
+  }
+
+  return issues.find((issue) => issue.id === vote.issueId)?.status === where.issue.status;
 };
 
 const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}) => {
@@ -183,11 +201,13 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
         include,
         orderBy,
       }: {
-        where: OwnerWhere;
+        where: VoteWhere;
         include?: { issue: { select: { slug: true } } };
         orderBy?: { updatedAt: 'asc' | 'desc' };
       }) => {
-        const rows = db.votes.filter((vote) => matchesOwner(vote, where));
+        const rows = db.votes.filter(
+          (vote) => matchesOwner(vote, where) && matchesIssue(db.issues, vote, where),
+        );
 
         if (orderBy) {
           rows.sort((left, right) =>
@@ -309,6 +329,9 @@ const ISSUES: FakeIssueRow[] = [
   { id: 'issue-1', slug: 'work-week-4-5', status: 'PUBLISHED' },
   { id: 'issue-2', slug: 'draft-issue', status: 'REVIEW' },
   { id: 'issue-3', slug: null, status: 'REVIEW' },
+  { id: 'issue-4', slug: 'ai-regulation', status: 'PUBLISHED' },
+  /** 발행됐지만 slug 가 비어 있는 예외 상황(스키마상 slug 는 선택 값이다). */
+  { id: 'issue-5', slug: null, status: 'PUBLISHED' },
 ];
 
 describe('PrismaVoteStore', () => {
@@ -406,20 +429,18 @@ describe('PrismaVoteStore', () => {
 
   it('내 표를 최근에 바꾼 순서로 slug 와 함께 돌려준다', async () => {
     await store.castVote('issue-1', 'user-1', VoteChoice.AGREE);
-    await store.castVote('issue-2', 'user-1', VoteChoice.DISAGREE);
+    await store.castVote('issue-4', 'user-1', VoteChoice.DISAGREE);
     await store.castVote('issue-1', 'user-2', VoteChoice.UNSURE);
 
     const rows = await store.listMyVotes('user-1');
 
     expect(rows).toEqual([
       {
-        issueId: 'issue-2',
-        issueSlug: 'draft-issue',
+        issueSlug: 'ai-regulation',
         choice: VoteChoice.DISAGREE,
         votedAt: expect.any(String),
       },
       {
-        issueId: 'issue-1',
         issueSlug: 'work-week-4-5',
         choice: VoteChoice.AGREE,
         votedAt: expect.any(String),
@@ -428,8 +449,18 @@ describe('PrismaVoteStore', () => {
     expect(rows[0].votedAt).toBe(new Date(rows[0].votedAt).toISOString());
   });
 
-  it('slug 가 없는 이슈의 표는 issueSlug 가 null 이다', async () => {
-    await store.castVote('issue-3', 'user-1', VoteChoice.AGREE);
+  it('아직 발행되지 않은 이슈의 표는 목록에서 뺀다', async () => {
+    await store.castVote('issue-1', 'user-1', VoteChoice.AGREE);
+    await store.castVote('issue-2', 'user-1', VoteChoice.DISAGREE);
+    await store.castVote('issue-3', 'user-1', VoteChoice.UNSURE);
+
+    const rows = await store.listMyVotes('user-1');
+
+    expect(rows.map((row) => row.issueSlug)).toEqual(['work-week-4-5']);
+  });
+
+  it('발행됐지만 slug 가 없는 이슈의 표는 issueSlug 가 null 이다', async () => {
+    await store.castVote('issue-5', 'user-1', VoteChoice.AGREE);
 
     expect((await store.listMyVotes('user-1'))[0].issueSlug).toBeNull();
   });

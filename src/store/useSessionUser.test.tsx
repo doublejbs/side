@@ -1,9 +1,9 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionUser } from '@/domain/SessionUser';
 import { isAuthEnabled } from '@/lib/auth/isAuthEnabled';
-import { resetSession } from '@/store/SessionCache';
+import { invalidateSession, resetSession } from '@/store/SessionCache';
 import { useSessionUser } from '@/store/useSessionUser';
 
 vi.mock('@/lib/auth/isAuthEnabled', () => ({ isAuthEnabled: vi.fn() }));
@@ -94,6 +94,29 @@ describe('useSessionUser', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('세션을 무효화하면 비로그인으로 바뀌고 다음 마운트에서 다시 받아온다', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(USER));
+
+    const first = renderHook(() => useSessionUser());
+
+    await waitFor(() => {
+      expect(first.result.current).toEqual({ user: USER, isLoaded: true });
+    });
+
+    act(() => {
+      invalidateSession();
+    });
+
+    expect(first.result.current).toEqual({ user: null, isLoaded: true });
+
+    first.unmount();
+    renderHook(() => useSessionUser());
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
     });
   });
 });

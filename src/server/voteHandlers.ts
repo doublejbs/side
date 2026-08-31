@@ -25,8 +25,6 @@ interface BaseDeps {
   sessionUser: SessionUser | null;
 }
 
-export type ListMyVotesDeps = BaseDeps;
-
 export interface VoteDeps extends BaseDeps {
   slug: string;
 }
@@ -90,7 +88,7 @@ export const handleGetMyVote = async ({
   return { status: 200, body: await buildVoteResult(store, slug, issueId, sessionUser?.id ?? null) };
 };
 
-/** 화면은 slug 로만 이슈를 가리키므로 아직 발행되지 않은 이슈의 표는 목록에서 뺀다. */
+/** 스토어가 발행된 이슈의 표만 주지만, 그중 slug 가 비어 있는 표는 화면이 가리킬 수 없어 뺀다. */
 const toMyVotes = (rows: MyVoteRow[]): MyVote[] =>
   rows.flatMap((row) =>
     row.issueSlug === null
@@ -106,7 +104,7 @@ const toMyVotes = (rows: MyVoteRow[]): MyVote[] =>
 export const handleListMyVotes = async ({
   store,
   sessionUser,
-}: ListMyVotesDeps): Promise<HandlerResponse> => {
+}: BaseDeps): Promise<HandlerResponse> => {
   if (!sessionUser) {
     return loginRequiredResponse();
   }

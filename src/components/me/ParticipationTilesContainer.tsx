@@ -4,6 +4,8 @@ import { ParticipationTilesView } from '@/components/me/ParticipationTilesView';
 import { useMyVotes } from '@/store/useMyVotes';
 import { useUserVotes } from '@/store/useUserVotes';
 
+import styles from './ParticipationTilesContainer.module.css';
+
 interface Props {
   readEvidenceCount: number;
   changedCount: number;
@@ -21,9 +23,14 @@ export const ParticipationTilesContainer = ({
   changedCount,
   isServerEnabled = false,
 }: Props) => {
-  const { votes: myVotes } = useMyVotes();
+  const { votes: myVotes, isLoaded } = useMyVotes(isServerEnabled);
   const localVotes = useUserVotes();
   const votedCount = isServerEnabled ? myVotes?.length ?? 0 : Object.keys(localVotes).length;
+
+  // 서버 집계가 오기 전에 투표 수를 0 으로 보여주지 않는다.
+  if (isServerEnabled && !isLoaded) {
+    return <div className={styles.placeholder} aria-busy="true" />;
+  }
 
   return (
     <ParticipationTilesView

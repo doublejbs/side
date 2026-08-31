@@ -5,7 +5,7 @@ import { getVoteChoiceKey } from '@/domain/voteChoiceKey';
 import type { ClaimedAnonRecordCounts, MyVoteRow, VoteStore } from '@/server/VoteStore';
 
 interface SeedOptions {
-  /** slug 를 이슈 id 로 매핑한 시드 데이터. */
+  /** 발행된 이슈의 slug 를 이슈 id 로 매핑한 시드 데이터. 여기 없는 이슈는 미발행으로 다룬다. */
   issues?: Record<string, string>;
   claimIds?: string[];
 }
@@ -78,23 +78,24 @@ export class InMemoryVoteStore implements VoteStore {
     const slugByIssueId = new Map(
       [...this.issueIdBySlug.entries()].map(([slug, issueId]) => [issueId, slug]),
     );
-    const rows: { issueId: string; entry: VoteEntry }[] = [];
+    const rows: { issueSlug: string; entry: VoteEntry }[] = [];
 
     this.votes.forEach((entry, key) => {
       const { owner, target } = splitKey(key);
+      const issueSlug = slugByIssueId.get(target);
 
-      if (owner !== userId) {
+      // 시드에 없는 이슈는 아직 발행되지 않은 이슈다. 화면이 가리킬 수 없으므로 뺀다.
+      if (owner !== userId || issueSlug === undefined) {
         return;
       }
 
-      rows.push({ issueId: target, entry });
+      rows.push({ issueSlug, entry });
     });
 
     return rows
       .sort((left, right) => right.entry.seq - left.entry.seq)
-      .map(({ issueId, entry }) => ({
-        issueId,
-        issueSlug: slugByIssueId.get(issueId) ?? null,
+      .map(({ issueSlug, entry }) => ({
+        issueSlug,
         choice: entry.choice,
         votedAt: entry.votedAt,
       }));

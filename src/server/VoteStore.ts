@@ -2,9 +2,11 @@ import type { VoteCounts } from '@/data/voteAggregation';
 import { ClaimFeedback } from '@/domain/ClaimFeedback';
 import { VoteChoice } from '@/domain/VoteChoice';
 
-/** `listMyVotes` 가 돌려주는 한 행. 아직 발행되지 않은 이슈의 표는 `issueSlug` 가 null 이다. */
+/**
+ * `listMyVotes` 가 돌려주는 한 행. 발행된 이슈의 표만 담기지만,
+ * 발행 상태인데도 slug 가 비어 있을 수 있으므로 `issueSlug` 는 null 을 허용한다.
+ */
 export interface MyVoteRow {
-  issueId: string;
   issueSlug: string | null;
   choice: VoteChoice;
   /** ISO 8601 — 마지막으로 선택을 바꾼 시각(`updatedAt`). */
@@ -32,6 +34,7 @@ export interface VoteStore {
   countVotes(issueId: string): Promise<VoteCounts>;
   /**
    * 한 사용자의 표 전체. 최근에 바꾼 순서(`updatedAt` 내림차순)다.
+   * 화면은 slug 로만 이슈를 가리키므로 **발행된 이슈의 표만** 돌려준다.
    * "나"·"발견" 탭의 내 투표 집계가 이 목록을 쓴다. 근거: docs/AuthSpec.md 4.4.
    */
   listMyVotes(userId: string): Promise<MyVoteRow[]>;
