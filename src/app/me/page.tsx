@@ -7,6 +7,7 @@ import { getIssueRepository } from '@/data/getIssueRepository';
 import { OPINION_CHANGES, PARTICIPATION_SUMMARY, PERSPECTIVE_POINTS } from '@/data/perspectiveData';
 import { buildLoginHref } from '@/lib/auth/buildLoginHref';
 import { isAuthEnabled } from '@/lib/auth/isAuthEnabled';
+import { isServerVoteEnabled } from '@/server/isServerVoteEnabled';
 
 import styles from './page.module.css';
 
@@ -56,6 +57,7 @@ const MePage = async () => {
         patternIssueCount={PARTICIPATION_SUMMARY.patternIssueCount}
         readEvidenceCount={PARTICIPATION_SUMMARY.readEvidenceCount}
         loginHref={loginHref}
+        isServerEnabled={isServerVoteEnabled()}
       />
     </main>
   );

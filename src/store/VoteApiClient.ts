@@ -7,6 +7,7 @@ import type {
   VoteResultResponse,
 } from '@/domain/VoteApiTypes';
 import { LoginRequiredError } from '@/store/LoginRequiredError';
+import { invalidateMyVotes } from '@/store/MyVotesCache';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
@@ -37,7 +38,12 @@ export const castVoteRequest = async (
     body: JSON.stringify(body),
   });
 
-  return readJson<VoteResultResponse>(response);
+  const result = await readJson<VoteResultResponse>(response);
+
+  // 표가 하나 늘거나 바뀌었으므로 "나"·"발견" 탭이 쓰는 내 투표 목록을 다시 받아오게 한다.
+  invalidateMyVotes();
+
+  return result;
 };
 
 /** `GET /api/issues/[slug]/votes/me` — 현재 분포와 내 선택을 받는다. 분포는 캐시하지 않는다. */

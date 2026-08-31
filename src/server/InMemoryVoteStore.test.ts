@@ -82,6 +82,52 @@ describe('InMemoryVoteStore 투표', () => {
   });
 });
 
+describe('InMemoryVoteStore 내 투표 목록', () => {
+  it('투표한 적이 없으면 빈 목록이다', async () => {
+    await expect(store.listMyVotes('user-1')).resolves.toEqual([]);
+  });
+
+  it('내 표만 최근 순서로 돌려준다', async () => {
+    await store.castVote(ISSUE_ID, 'user-1', VoteChoice.AGREE);
+    await store.castVote('issue-2', 'user-1', VoteChoice.DISAGREE);
+    await store.castVote(ISSUE_ID, 'user-2', VoteChoice.UNSURE);
+
+    const rows = await store.listMyVotes('user-1');
+
+    expect(rows.map((row) => row.issueId)).toEqual(['issue-2', ISSUE_ID]);
+    expect(rows[1]).toEqual({
+      issueId: ISSUE_ID,
+      issueSlug: SLUG,
+      choice: VoteChoice.AGREE,
+      votedAt: expect.any(String),
+    });
+  });
+
+  it('slug 를 모르는 이슈의 표는 issueSlug 가 null 이다', async () => {
+    await store.castVote('issue-2', 'user-1', VoteChoice.AGREE);
+
+    const rows = await store.listMyVotes('user-1');
+
+    expect(rows[0].issueSlug).toBeNull();
+  });
+
+  it('다시 투표하면 표는 하나로 남고 선택만 바뀐다', async () => {
+    await store.castVote(ISSUE_ID, 'user-1', VoteChoice.AGREE);
+    await store.castVote(ISSUE_ID, 'user-1', VoteChoice.UNSURE);
+
+    const rows = await store.listMyVotes('user-1');
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].choice).toBe(VoteChoice.UNSURE);
+  });
+
+  it('아직 이전되지 않은 익명 표는 내 목록에 넣지 않는다', async () => {
+    store.seedAnonVote(ISSUE_ID, 'anon-1', VoteChoice.AGREE);
+
+    await expect(store.listMyVotes('anon-1')).resolves.toEqual([]);
+  });
+});
+
 describe('InMemoryVoteStore 근거 피드백', () => {
   it('피드백을 저장하고 다시 읽는다', async () => {
     await store.setClaimFeedback(CLAIM_ID, 'user-1', ClaimFeedback.PERSUADED);

@@ -15,6 +15,7 @@ interface FakeVoteRow {
   anonId: string | null;
   userId: string | null;
   choice: string;
+  updatedAt: Date;
 }
 
 interface FakeFeedbackRow {
@@ -27,7 +28,8 @@ interface FakeFeedbackRow {
 
 interface FakeIssueRow {
   id: string;
-  slug: string;
+  /** 아직 발행되지 않은 이슈는 slug 가 없다. */
+  slug: string | null;
   status: string;
 }
 
@@ -85,11 +87,19 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
 
   let shouldFailUpsert = options.failNextVoteUpsert ?? false;
   let sequence = 0;
+  let clock = 0;
 
   const nextId = (prefix: string): string => {
     sequence += 1;
 
     return `${prefix}-${sequence}`;
+  };
+
+  /** 쓸 때마다 1초씩 흐르는 시계. `updatedAt` 정렬을 결정적으로 만든다. */
+  const nextUpdatedAt = (): Date => {
+    clock += 1;
+
+    return new Date(Date.UTC(2026, 7, 1) + clock * 1000);
   };
 
   const findVote = ({ issueId_userId: key }: UniqueVoteWhere): FakeVoteRow | undefined =>
@@ -125,6 +135,7 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
             ...create,
             anonId: null,
             choice: VoteChoice.UNSURE,
+            updatedAt: nextUpdatedAt(),
           });
 
           throw createUniqueConstraintError();
@@ -134,11 +145,17 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
 
         if (existing) {
           existing.choice = update.choice;
+          existing.updatedAt = nextUpdatedAt();
 
           return { ...existing };
         }
 
-        const row: FakeVoteRow = { id: nextId('vote'), ...create, anonId: null };
+        const row: FakeVoteRow = {
+          id: nextId('vote'),
+          ...create,
+          anonId: null,
+          updatedAt: nextUpdatedAt(),
+        };
 
         db.votes.push(row);
 
@@ -152,6 +169,7 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
         }
 
         existing.choice = data.choice;
+        existing.updatedAt = nextUpdatedAt();
 
         return { ...existing };
       },
@@ -160,8 +178,32 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
 
         return found ? { choice: found.choice } : null;
       },
-      findMany: async ({ where }: { where: OwnerWhere }) =>
-        db.votes.filter((vote) => matchesOwner(vote, where)).map((vote) => ({ ...vote })),
+      findMany: async ({
+        where,
+        include,
+        orderBy,
+      }: {
+        where: OwnerWhere;
+        include?: { issue: { select: { slug: true } } };
+        orderBy?: { updatedAt: 'asc' | 'desc' };
+      }) => {
+        const rows = db.votes.filter((vote) => matchesOwner(vote, where));
+
+        if (orderBy) {
+          rows.sort((left, right) =>
+            orderBy.updatedAt === 'desc'
+              ? right.updatedAt.getTime() - left.updatedAt.getTime()
+              : left.updatedAt.getTime() - right.updatedAt.getTime(),
+          );
+        }
+
+        return rows.map((vote) => ({
+          ...vote,
+          ...(include
+            ? { issue: { slug: db.issues.find((issue) => issue.id === vote.issueId)?.slug ?? null } }
+            : {}),
+        }));
+      },
       updateMany: async ({
         where,
         data,
@@ -266,6 +308,7 @@ const createFakePrisma = (seed: Partial<FakeDatabase>, options: FakeOptions = {}
 const ISSUES: FakeIssueRow[] = [
   { id: 'issue-1', slug: 'work-week-4-5', status: 'PUBLISHED' },
   { id: 'issue-2', slug: 'draft-issue', status: 'REVIEW' },
+  { id: 'issue-3', slug: null, status: 'REVIEW' },
 ];
 
 describe('PrismaVoteStore', () => {
@@ -287,7 +330,14 @@ describe('PrismaVoteStore', () => {
     await store.castVote('issue-1', 'user-1', VoteChoice.AGREE);
 
     expect(fake.db.votes).toEqual([
-      { id: 'vote-1', issueId: 'issue-1', anonId: null, userId: 'user-1', choice: VoteChoice.AGREE },
+      {
+        id: 'vote-1',
+        issueId: 'issue-1',
+        anonId: null,
+        userId: 'user-1',
+        choice: VoteChoice.AGREE,
+        updatedAt: expect.any(Date),
+      },
     ]);
     expect(await store.getMyVote('issue-1', 'user-1')).toBe(VoteChoice.AGREE);
     expect(await store.getMyVote('issue-1', 'user-2')).toBeNull();
@@ -346,11 +396,46 @@ describe('PrismaVoteStore', () => {
       anonId: 'anon-1',
       userId: null,
       choice: VoteChoice.DISAGREE,
+      updatedAt: new Date('2026-08-01T00:00:00.000Z'),
     });
 
     await store.castVote('issue-1', 'user-1', VoteChoice.AGREE);
 
     expect(await store.countVotes('issue-1')).toEqual({ agree: 1, disagree: 1, unsure: 0 });
+  });
+
+  it('내 표를 최근에 바꾼 순서로 slug 와 함께 돌려준다', async () => {
+    await store.castVote('issue-1', 'user-1', VoteChoice.AGREE);
+    await store.castVote('issue-2', 'user-1', VoteChoice.DISAGREE);
+    await store.castVote('issue-1', 'user-2', VoteChoice.UNSURE);
+
+    const rows = await store.listMyVotes('user-1');
+
+    expect(rows).toEqual([
+      {
+        issueId: 'issue-2',
+        issueSlug: 'draft-issue',
+        choice: VoteChoice.DISAGREE,
+        votedAt: expect.any(String),
+      },
+      {
+        issueId: 'issue-1',
+        issueSlug: 'work-week-4-5',
+        choice: VoteChoice.AGREE,
+        votedAt: expect.any(String),
+      },
+    ]);
+    expect(rows[0].votedAt).toBe(new Date(rows[0].votedAt).toISOString());
+  });
+
+  it('slug 가 없는 이슈의 표는 issueSlug 가 null 이다', async () => {
+    await store.castVote('issue-3', 'user-1', VoteChoice.AGREE);
+
+    expect((await store.listMyVotes('user-1'))[0].issueSlug).toBeNull();
+  });
+
+  it('투표한 적이 없으면 빈 목록이다', async () => {
+    await expect(store.listMyVotes('user-9')).resolves.toEqual([]);
   });
 
   it('근거 피드백을 저장하고 바꾸고 해제한다', async () => {
@@ -385,6 +470,7 @@ describe('PrismaVoteStore 익명 레코드 이전', () => {
       anonId: 'anon-1',
       userId: null,
       choice: VoteChoice.AGREE,
+      updatedAt: new Date('2026-08-01T00:00:00.000Z'),
     });
     fake.db.feedbacks.push({
       id: 'feedback-anon',
@@ -403,7 +489,14 @@ describe('PrismaVoteStore 익명 레코드 이전', () => {
 
     expect(await store.claimAnonRecords('anon-1', 'user-1')).toEqual({ votes: 1, feedbacks: 1 });
     expect(fake.db.votes).toEqual([
-      { id: 'vote-anon', issueId: 'issue-1', anonId: null, userId: 'user-1', choice: VoteChoice.AGREE },
+      {
+        id: 'vote-anon',
+        issueId: 'issue-1',
+        anonId: null,
+        userId: 'user-1',
+        choice: VoteChoice.AGREE,
+        updatedAt: expect.any(Date),
+      },
     ]);
     expect(fake.db.feedbacks[0]).toMatchObject({ anonId: null, userId: 'user-1' });
     expect(await store.getMyVote('issue-1', 'user-1')).toBe(VoteChoice.AGREE);

@@ -10,7 +10,7 @@ import type { VoteCounts } from '@/data/voteAggregation';
 import type { ClaimFeedback } from '@/domain/ClaimFeedback';
 import type { VoteChoice } from '@/domain/VoteChoice';
 import { getVoteChoiceKey } from '@/domain/voteChoiceKey';
-import type { ClaimedAnonRecordCounts, VoteStore } from '@/server/VoteStore';
+import type { ClaimedAnonRecordCounts, MyVoteRow, VoteStore } from '@/server/VoteStore';
 
 /** 유니크 제약 위반(Prisma). 같은 사용자의 첫 투표가 동시에 들어오면 upsert 가 이 오류로 실패한다. */
 const UNIQUE_CONSTRAINT_ERROR_CODE = 'P2002';
@@ -100,6 +100,21 @@ export class PrismaVoteStore implements VoteStore {
     });
 
     return counts;
+  }
+
+  async listMyVotes(userId: string): Promise<MyVoteRow[]> {
+    const rows = await this.prisma.vote.findMany({
+      where: { userId },
+      include: { issue: { select: { slug: true } } },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    return rows.map((row) => ({
+      issueId: row.issueId,
+      issueSlug: row.issue.slug,
+      choice: toDomainVoteChoice(row.choice),
+      votedAt: row.updatedAt.toISOString(),
+    }));
   }
 
   async setClaimFeedback(

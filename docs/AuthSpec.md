@@ -71,10 +71,11 @@ model ClaimFeedbackRecord {
 - 게이트는 **서버 모드에서만** 작동한다. 목 모드(`isServerEnabled === false`)는 로그인 없이 localStorage에 기록한다(개발 편의).
 - API가 `401`을 주면 `VoteApiClient`가 `LoginRequiredError`를 던지고, `useVote`·`useClaimFeedback`이 `isLoginRequired`로 구분해 돌려준다. 컨테이너는 저장 실패 문구 대신 로그인 링크를 렌더한다.
 - `/me`: 페이지는 정적으로 두고 `MePageContainer`(client)가 세션을 읽어 본문을 고른다. 서버는 목 데이터와 이슈 조회 결과(질문·주장 제목)를 props로 내려준다. 로그인 시 상단에 계정 카드(`AccountCardView` — 아바타·이름·이메일·`<form action="/auth/signout" method="post">` 로그아웃 버튼) + 기존 섹션, 비로그인 시 `LoginRequiredView`(로그인 안내 카드 + 로그인 버튼)만 렌더하고 정치 관점·의견 변화 목 데이터는 감춘다.
-- **"나의 참여 · 투표한 이슈" 수는 이번 범위에서 localStorage 기록(`useUserVotes`)을 그대로 쓴다. `userId` 기준 서버 집계는 후속 작업이다.**
-- `/discover`: "당신과 가장 다른 의견"·"내 생각과 비슷한 그룹"은 내 투표에 기대므로, 로그인이 켜져 있고 세션이 없으면 카드 대신 안내 문구 + 로그인 링크를 보여준다. 판정은 두 섹션 컨테이너가 `useSessionUser()`로 하고 페이지는 `loginHref`만 넘긴다(`/me`와 같은 원칙 — 페이지는 정적, 세션은 클라이언트). 서버 집계(userId) 전환은 후속 작업이다.
+- **"나의 참여 · 투표한 이슈" 수는 서버 모드에서 `userId` 기준 서버 집계를 쓴다(구현 완료).** `ParticipationTilesContainer` 가 `useMyVotes()` 로 `GET /api/me/votes` 결과를 읽어 `votes?.length ?? 0` 을 보여준다(비로그인이면 0). 목 모드(`isServerEnabled === false`)에서만 localStorage 기록(`useUserVotes`)을 쓴다 — 그 훅은 이제 목 모드 전용 집계원이다.
+- `/discover`: "당신과 가장 다른 의견"·"내 생각과 비슷한 그룹"은 내 투표에 기대므로, 로그인이 켜져 있고 세션이 없으면 카드 대신 안내 문구 + 로그인 링크를 보여준다. 판정은 두 섹션 컨테이너가 `useSessionUser()`로 하고 페이지는 `loginHref`만 넘긴다(`/me`와 같은 원칙 — 페이지는 정적, 세션은 클라이언트). 서버 집계(userId) 전환도 구현 완료다 — 두 컨테이너는 서버 모드에서 `useMyVotes()` 결과를 쓰고, 목 모드에서만 localStorage 기록을 쓴다. 두 입력은 `toVoteChoiceBySlug`(서버) / `toVoteChoiceBySlugFromRecords`(목)로 같은 `Map<slug, VoteChoice>` 형태로 맞춰 `pickMostDifferentIssue` 에 넘긴다.
+- **내 투표 서버 집계**: `GET /api/me/votes`(비로그인 `401 LOGIN_REQUIRED`, `Cache-Control: no-store`)를 `MyVotesCache`(모듈 스코프 + `useSyncExternalStore`)가 한 번만 부르고 `useMyVotes()`가 `{ votes, isLoaded }`를 돌려준다. 세션이 **로그인으로 확인된 뒤에만** 요청하고, 비로그인·로그인 비활성·401·요청 실패는 모두 `votes: null` 이다. 투표가 저장되면(`castVoteRequest` 성공) `invalidateMyVotes()` 가 요청 표시만 지워 다음 조회에서 다시 받아온다(마지막 목록은 남겨 화면이 깜빡이지 않는다). `isServerEnabled` 는 기존 흐름대로 페이지(서버 컴포넌트)가 `isServerVoteEnabled()` 로 판정해 컨테이너에 내려준다.
 - 관리자 목록에 변화 없음.
-- **렌더링 비용**: 세션을 클라이언트에서 읽으므로 로그인을 켜도 공개 화면(`/`·`/discover`·`/me`·`/issues/**`)은 ISR 정적 렌더로 남는다(`.next/prerender-manifest.json`의 `initialRevalidateSeconds: 60`으로 확인). 세션을 읽는 동적 경로는 `GET /api/session`·투표 API·`/login`뿐이다.
+- **렌더링 비용**: 세션을 클라이언트에서 읽으므로 로그인을 켜도 공개 화면(`/`·`/discover`·`/me`·`/issues/**`)은 ISR 정적 렌더로 남는다(`.next/prerender-manifest.json`의 `initialRevalidateSeconds: 60`으로 확인). 세션을 읽는 동적 경로는 `GET /api/session`·`GET /api/me/votes`·투표 API·`/login`뿐이다.
 
 ### 4.5 화면 구조
 ```
@@ -95,6 +96,9 @@ src/components/me/MePageContainer.tsx         // 'use client' — /me 본문(비
 src/store/LoginRequiredError.ts               // 401 을 화면이 구분할 수 있게 하는 오류 타입
 src/store/SessionCache.ts                     // 모듈 스코프 세션 캐시(useSyncExternalStore + /api/session 1회 조회)
 src/store/useSessionUser.ts                   // { user, isLoaded } — 클라이언트 세션 판정
+src/store/MyVotesCache.ts                     // 모듈 스코프 내 투표 캐시(/api/me/votes 1회 조회 + invalidateMyVotes)
+src/store/useMyVotes.ts                       // { votes, isLoaded } — 로그인 확인 후에만 서버 집계 조회
+src/components/discover/toVoteChoiceBySlug.ts // 서버 집계·목 모드 기록을 Map<slug, VoteChoice> 로 맞추는 변환
 ```
 - 두 공급자 버튼의 색(Google `#ffffff`/`#dadce0`, 카카오 `#FEE500`/`#191919`)과 브랜드 마크 색은 각 사의 브랜드 가이드가 정한 값이라 디자인 토큰 규칙의 예외다. 해당 CSS·아이콘 파일에 주석으로 근거를 남긴다.
 
@@ -123,6 +127,8 @@ src/testing/FakeAuthGateway.ts                   // 테스트용 AuthGateway 대
 src/app/auth/callback/route.ts                   // GET /auth/callback?code=&next=
 src/app/auth/signout/route.ts                    // POST /auth/signout → 303 / (교차 출처면 403)
 src/app/api/session/route.ts                     // GET /api/session → SessionUser | null (no-store)
+src/app/api/me/votes/route.ts                    // GET /api/me/votes → { votes: MyVote[] } (401 비로그인, no-store)
+src/domain/MyVote.ts                             // { slug, choice, votedAt }
 src/app/login/page.tsx, src/components/auth/LoginPageView.tsx, OAuthButtonView.tsx, AccountCardView.tsx
 ```
 
@@ -136,9 +142,9 @@ src/app/login/page.tsx, src/components/auth/LoginPageView.tsx, OAuthButtonView.t
 - `isSameOriginRequest(request: Request): boolean` — `Origin` 이 요청 origin 과 같거나, `Origin` 이 없고 `Sec-Fetch-Site` 가 `same-origin`·`none` 일 때만 true.
 - `migrateAnonVotes({ store, anonCookieValue, secret, userId })` → `{ clearCookie, votes, feedbacks }`
 
-`VoteStore` 시그니처: `castVote(issueId, userId, choice)`, `getMyVote(issueId, userId)`, `setClaimFeedback(claimId, userId, feedback)`, `getMyClaimFeedback(claimId, userId)`, `claimAnonRecords(anonId, userId): Promise<{ votes; feedbacks }>`. 인메모리 구현도 동일하며, 이전 시나리오를 만들기 위한 `seedAnonVote`/`seedAnonClaimFeedback` 을 테스트 전용으로 둔다.
+`VoteStore` 시그니처: `castVote(issueId, userId, choice)`, `getMyVote(issueId, userId)`, `listMyVotes(userId): Promise<MyVoteRow[]>`(`{ issueId, issueSlug, choice, votedAt }` — Prisma 는 `updatedAt` 내림차순, 이슈 slug 를 함께 읽는다), `setClaimFeedback(claimId, userId, feedback)`, `getMyClaimFeedback(claimId, userId)`, `claimAnonRecords(anonId, userId): Promise<{ votes; feedbacks }>`. 인메모리 구현도 동일하며, 이전 시나리오를 만들기 위한 `seedAnonVote`/`seedAnonClaimFeedback` 을 테스트 전용으로 둔다.
 
-`voteHandlers` 는 쿠키 대신 `sessionUser: SessionUser | null` 을 주입받는다. 쓰기 핸들러는 비로그인이면 `401 { error: 'LOGIN_REQUIRED' }`(`VoteApiErrorCode.LOGIN_REQUIRED`), `handleGetMyVote` 는 `myChoice: null` + 분포를 돌려준다. 익명 쿠키 신규 발급 코드는 제거했고(`readOrCreateAnonId`·`buildAnonCookie` 삭제), 이전용 읽기(`verifyAnonId`)만 남았다. `isServerVoteEnabled`/`getServerVoteContext` 는 그대로다(`secret` 은 익명 표 이전 검증에 쓴다).
+`voteHandlers` 는 쿠키 대신 `sessionUser: SessionUser | null` 을 주입받는다. 쓰기 핸들러는 비로그인이면 `401 { error: 'LOGIN_REQUIRED' }`(`VoteApiErrorCode.LOGIN_REQUIRED`), `handleGetMyVote` 는 `myChoice: null` + 분포를 돌려준다. `handleListMyVotes({ store, sessionUser })` 는 비로그인이면 401, 로그인이면 `{ votes: MyVote[] }` 를 돌려주며 slug 가 없는(미발행) 이슈의 표는 뺀다. 익명 쿠키 신규 발급 코드는 제거했고(`readOrCreateAnonId`·`buildAnonCookie` 삭제), 이전용 읽기(`verifyAnonId`)만 남았다. `isServerVoteEnabled`/`getServerVoteContext` 는 그대로다(`secret` 은 익명 표 이전 검증에 쓴다).
 
 `proxy.ts` 는 `updateSupabaseSession` 으로 매 요청 세션을 갱신한 뒤 기존 `/admin` 보호를 수행한다. matcher 는 정적 확장자까지 제외한 `'/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml)$).*)'` 이다(이미지·robots 류에 세션 갱신을 붙이지 않는다). `getSessionUser` 는 React `cache()` 로 감싸 한 요청 안에서 Supabase 왕복을 한 번만 한다.
 
@@ -154,6 +160,8 @@ src/app/login/page.tsx, src/components/auth/LoginPageView.tsx, OAuthButtonView.t
 - `sanitizeNextPath`: 제어문자(`%09`·`%0A`·`%0D`) 우회, `//evil`, `/\evil`, `javascript:` 거부와 정상 경로·쿼리·해시 유지.
 - `getSessionUser`: Google·카카오 형태 `user_metadata` 에서 이름·아바타 매핑.
 - `useSessionUser`: 로그인이 꺼져 있으면 요청 없음, 마운트 시 `/api/session` 1회 조회, 실패 시 비로그인.
+- `handleListMyVotes`: 비로그인 401, 내 표만 최근 순, slug 없는 표 제외. `listMyVotes`: 인메모리·Prisma 두 구현 모두 최근 순·slug 매핑.
+- `useMyVotes`: 로그인 비활성·비로그인이면 요청 없음, 로그인 확인 뒤 `/api/me/votes` 1회 조회, 401·실패는 `votes: null`. `castVoteRequest` 성공 뒤 캐시 무효화(다음 조회에서 재요청).
 - `handleSignOut`·`isSameOriginRequest`: 교차 출처 403(로그아웃 미호출), 동일 출처 303 + `clearAnonCookie`.
 - `useVote`·`useClaimFeedback`: 401 이면 localStorage 롤백, 500 이면 로컬 기록 유지.
 

@@ -2,6 +2,15 @@ import type { VoteCounts } from '@/data/voteAggregation';
 import { ClaimFeedback } from '@/domain/ClaimFeedback';
 import { VoteChoice } from '@/domain/VoteChoice';
 
+/** `listMyVotes` 가 돌려주는 한 행. 아직 발행되지 않은 이슈의 표는 `issueSlug` 가 null 이다. */
+export interface MyVoteRow {
+  issueId: string;
+  issueSlug: string | null;
+  choice: VoteChoice;
+  /** ISO 8601 — 마지막으로 선택을 바꾼 시각(`updatedAt`). */
+  votedAt: string;
+}
+
 /** `claimAnonRecords` 가 계정으로 옮긴 레코드 수. 삭제된 충돌 레코드는 세지 않는다. */
 export interface ClaimedAnonRecordCounts {
   votes: number;
@@ -21,6 +30,11 @@ export interface VoteStore {
   getMyVote(issueId: string, userId: string): Promise<VoteChoice | null>;
   /** 여론 집계. 아직 이전되지 않은 익명 표도 함께 센다. */
   countVotes(issueId: string): Promise<VoteCounts>;
+  /**
+   * 한 사용자의 표 전체. 최근에 바꾼 순서(`updatedAt` 내림차순)다.
+   * "나"·"발견" 탭의 내 투표 집계가 이 목록을 쓴다. 근거: docs/AuthSpec.md 4.4.
+   */
+  listMyVotes(userId: string): Promise<MyVoteRow[]>;
   /** `feedback` 이 null 이면 기록을 지운다. */
   setClaimFeedback(claimId: string, userId: string, feedback: ClaimFeedback | null): Promise<void>;
   getMyClaimFeedback(claimId: string, userId: string): Promise<ClaimFeedback | null>;
