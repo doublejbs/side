@@ -4,6 +4,7 @@ import { AccountCardView } from '@/components/auth/AccountCardView';
 import { LoginRequiredView } from '@/components/auth/LoginRequiredView';
 import { PageHeroView } from '@/components/common/PageHeroView';
 import { SectionTitleView } from '@/components/common/SectionTitleView';
+import { LegalLinksView } from '@/components/legal/LegalLinksView';
 import { OpinionChangeView } from '@/components/me/OpinionChangeView';
 import { ParticipationTilesContainer } from '@/components/me/ParticipationTilesContainer';
 import { PerspectiveAxesView } from '@/components/me/PerspectiveAxesView';
@@ -54,7 +55,10 @@ export const MePageContainer = ({
         <PageHeroView title="나" />
 
         <div className={styles.content}>
-          <LoginRequiredView loginHref={loginHref} />
+          <div className={styles.accountBlock}>
+            <LoginRequiredView loginHref={loginHref} />
+            <LegalLinksView />
+          </div>
         </div>
       </>
     );
@@ -68,7 +72,12 @@ export const MePageContainer = ({
       />
 
       <div className={styles.content}>
-        {user ? <AccountCardView user={user} /> : null}
+        {user ? (
+          <div className={styles.accountBlock}>
+            <AccountCardView user={user} />
+            <LegalLinksView />
+          </div>
+        ) : null}
 
         <PerspectiveAxesView points={perspectivePoints} />
 

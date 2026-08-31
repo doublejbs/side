@@ -63,6 +63,16 @@ describe('LoginPage', () => {
     });
   });
 
+  it('약관·개인정보처리방침 링크를 보여준다', async () => {
+    await renderPage({});
+
+    expect(screen.getByRole('link', { name: '이용약관' })).toHaveAttribute('href', '/terms');
+    expect(screen.getByRole('link', { name: '개인정보처리방침' })).toHaveAttribute(
+      'href',
+      '/privacy',
+    );
+  });
+
   it('error=1 이면 실패 안내를 보여준다', async () => {
     await renderPage({ error: '1' });
 

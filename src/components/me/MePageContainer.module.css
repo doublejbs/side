@@ -15,3 +15,10 @@
 .placeholder {
   min-height: 320px;
 }
+
+/* 계정 카드(또는 로그인 안내)와 약관 링크는 한 덩어리로 붙여 둔다. */
+.accountBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

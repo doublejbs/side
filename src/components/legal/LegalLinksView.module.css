@@ -1,0 +1,16 @@
+.links {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 4px;
+}
+
+.link {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+.link:hover {
+  color: var(--color-ink-2);
+}

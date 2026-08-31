@@ -29,6 +29,24 @@ describe('LoginPageView', () => {
     expect(buttons[1]).toHaveTextContent('카카오로 계속하기');
   });
 
+  it('약관·방침 동의 안내와 두 문서 링크를 보여준다', () => {
+    render(<LoginPageView next="/" isAuthEnabled />);
+
+    expect(screen.getByText(/동의하는 것으로 간주됩니다/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '이용약관' })).toHaveAttribute('href', '/terms');
+    expect(screen.getByRole('link', { name: '개인정보처리방침' })).toHaveAttribute(
+      'href',
+      '/privacy',
+    );
+  });
+
+  it('로그인이 설정되지 않았어도 약관·방침 링크는 보여준다', () => {
+    render(<LoginPageView next="/" isAuthEnabled={false} />);
+
+    expect(screen.getByRole('link', { name: '이용약관' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '개인정보처리방침' })).toBeInTheDocument();
+  });
+
   it('오류로 되돌아왔으면 안내 문구를 보여준다', () => {
     render(<LoginPageView next="/" hasError isAuthEnabled />);
 
