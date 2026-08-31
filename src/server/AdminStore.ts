@@ -2,6 +2,7 @@ import type { KeyPoint, MediaPerspective, OpinionGroup } from '@/domain/Issue';
 import type { ClaimSide } from '@/domain/ClaimSide';
 import type { EvidenceSupport } from '@/domain/EvidenceSupport';
 import type { EvidenceType } from '@/domain/EvidenceType';
+import type { IssueAxis } from '@/domain/IssueAxis';
 import type { IssueClassification } from '@/domain/IssueClassification';
 import type { IssueStatus } from '@/domain/IssueStatus';
 import type { MediaLeaning } from '@/domain/MediaLeaning';
@@ -85,6 +86,8 @@ export interface AdminIssueDetail {
   slug: string | null;
   question: string;
   tags: string[];
+  /** 이 이슈가 걸린 관점 축(0~2개). 근거: docs/PerspectiveSpec.md 1장. */
+  axes: IssueAxis[];
   summary: string[];
   keyPoints: KeyPoint[];
   commonCoverage: string[];
@@ -114,6 +117,7 @@ export interface AdminIssueDetail {
 export interface AdminIssuePatch {
   question?: string;
   tags?: string[];
+  axes?: IssueAxis[];
   summary?: string[];
   keyPoints?: KeyPoint[];
   commonCoverage?: string[];

@@ -4,6 +4,18 @@ import { OPINION_GROUP_LABELS } from '@/domain/opinionGroupPresenter';
 /** 쟁점은 항상 4개를 편집한다. 근거: docs/PipelineSpec.md 5장. */
 export const KEY_POINT_COUNT = 4;
 
+/**
+ * 검수 폼의 관점 축 필드 이름. 뷰와 서버 액션이 같은 값을 쓰도록 한곳에 모은다.
+ * 근거: `docs/PerspectiveSpec.md` 1장.
+ */
+
+/** 축을 고르지 않은 칸의 값. `<select>` 는 빈 문자열만 "값 없음" 으로 보낼 수 있다. */
+export const UNSET_AXIS_VALUE = '';
+
+export const issueAxisAxisField = (index: number): string => `axis-${index}-axis`;
+
+export const issueAxisDirectionField = (index: number): string => `axis-${index}-direction`;
+
 /** 언론 관점·의견 그룹 칸 수는 파이프라인이 쓰는 목록과 같은 길이를 유지한다. */
 export const MEDIA_PERSPECTIVE_COUNT = MEDIA_LEANING_ORDER.length;
 

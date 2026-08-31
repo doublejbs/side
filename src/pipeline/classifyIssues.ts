@@ -1,5 +1,7 @@
 import { IssueStatus, type Prisma, type PrismaClient } from '@prisma/client';
 
+import { toPrismaJson } from '@/data/toPrismaJson';
+import type { IssueAxis } from '@/domain/IssueAxis';
 import type { IssueClassification } from '@/domain/IssueClassification';
 import { ARTICLE_SELECT } from '@/pipeline/articleSelect';
 import type { PipelineFailure } from '@/pipeline/PipelineFailure';
@@ -178,6 +180,7 @@ const resolveDuplicate = (
 const toClassification = (
   result: ClassifyResult,
   duplicate: ExistingIssueSummary | undefined,
+  axes: IssueAxis[],
 ): IssueClassification => ({
   isPolicyDebate: result.isPolicyDebate,
   debateScore: result.debateScore,
@@ -187,7 +190,16 @@ const toClassification = (
   keySentences: result.keySentences,
   keyClaims: result.keyClaims,
   ...(duplicate ? { duplicateOfIssueId: duplicate.id } : {}),
+  axes,
 });
+
+/**
+ * 모델이 제안한 관점 축. 확신이 없으면 빈 배열이 오고, 그때는 축이 없는 이슈로 남는다.
+ * 검수 화면에서 관리자가 고칠 수 있으므로 여기서는 제안을 그대로 저장한다.
+ * 근거: `docs/PerspectiveSpec.md` 1장.
+ */
+const toIssueAxes = (result: ClassifyResult): IssueAxis[] =>
+  result.axes.map((item) => ({ axis: item.axis, agreeDirection: item.agreeDirection }));
 
 interface ApplyClassificationParams {
   issue: { id: string; reviewNote: string | null };
@@ -206,6 +218,7 @@ export const applyClassification = async (
   { issue, result, duplicate, debateThreshold, now = new Date() }: ApplyClassificationParams,
 ): Promise<void> => {
   const passed = isPassing(result, debateThreshold);
+  const axes = toIssueAxes(result);
   const withDuplicateNote = duplicate
     ? appendNoteLine(issue.reviewNote, duplicateNote(duplicate.question))
     : issue.reviewNote;
@@ -218,7 +231,9 @@ export const applyClassification = async (
     data: {
       debateScore: result.debateScore,
       topic: result.topic,
-      classification: toClassification(result, duplicate) as unknown as Prisma.InputJsonValue,
+      // 축은 `Issue.axes` 가 정본이다. 분류 Json 에도 같이 남겨 모델이 무엇을 제안했는지 보존한다.
+      classification: toPrismaJson(toClassification(result, duplicate, axes)),
+      axes: toPrismaJson(axes),
       classifiedAt: now,
       reviewNote,
       ...(passed ? {} : { status: IssueStatus.AUTO_REJECTED }),

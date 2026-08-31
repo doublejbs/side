@@ -27,6 +27,7 @@ const createIssue = (overrides: Partial<AdminIssueDetail> = {}): AdminIssueDetai
   slug: null,
   question: '정년을 연장해야 할까?',
   tags: ['노동'],
+  axes: [],
   summary: ['문장 1'],
   keyPoints: [],
   commonCoverage: [],

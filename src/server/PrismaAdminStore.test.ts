@@ -1,10 +1,12 @@
 import type { PrismaClient } from '@prisma/client';
 
+import { AxisDirection } from '@/domain/AxisDirection';
 import { ClaimSide } from '@/domain/ClaimSide';
 import { EvidenceSupport } from '@/domain/EvidenceSupport';
 import { EvidenceType } from '@/domain/EvidenceType';
 import type { IssueClassification } from '@/domain/IssueClassification';
 import { IssueStatus } from '@/domain/IssueStatus';
+import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
 import { PIPELINE_TRANSACTION_OPTIONS } from '@/pipeline/transactionOptions';
 import { AdminActionError } from '@/server/AdminActionError';
 import { AdminMessage } from '@/server/AdminMessage';
@@ -21,6 +23,8 @@ interface FakeIssueRow {
   slug: string | null;
   question: string;
   tags: string[];
+  /** IssueAxis[]. 축이 정해지지 않았으면 null. */
+  axes: unknown;
   summary: string[];
   keyPoints: unknown;
   commonCoverage: string[];
@@ -69,6 +73,7 @@ const createIssueRow = (overrides: Partial<FakeIssueRow> = {}): FakeIssueRow => 
   slug: null,
   question: '정년을 연장해야 할까?',
   tags: ['노동'],
+  axes: [{ axis: 'LABOR', agreeDirection: 'RIGHT' }],
   summary: ['문장 1'],
   keyPoints: [],
   commonCoverage: [],
@@ -202,10 +207,42 @@ describe('PrismaAdminStore.getIssue', () => {
     expect(evidences?.[1]).toMatchObject({ support: null, verificationNote: null });
   });
 
+  it('관점 축을 읽고, 깨져 있으면 빈 배열로 떨어뜨린다', async () => {
+    const { prisma } = createFakePrisma([createIssueRow()], []);
+
+    expect((await new PrismaAdminStore(prisma).getIssue('issue-1'))?.axes).toEqual([
+      { axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT },
+    ]);
+
+    const broken = createFakePrisma([createIssueRow({ axes: [{ axis: '노동' }] })], []);
+
+    expect((await new PrismaAdminStore(broken.prisma).getIssue('issue-1'))?.axes).toEqual([]);
+  });
+
   it('분류 Json 이 깨져 있어도 폼을 열 수 있다', async () => {
     const { prisma } = createFakePrisma([createIssueRow({ classification: { broken: true } })], []);
 
     expect((await new PrismaAdminStore(prisma).getIssue('issue-1'))?.classification).toBeNull();
+  });
+});
+
+describe('PrismaAdminStore.updateIssue', () => {
+  it('넘긴 축만 Json 으로 저장한다', async () => {
+    const { prisma, updates } = createFakePrisma([createIssueRow()], []);
+
+    await new PrismaAdminStore(prisma).updateIssue('issue-1', {
+      axes: [{ axis: PerspectiveAxis.ECONOMY, agreeDirection: AxisDirection.LEFT }],
+    });
+
+    expect(updates[0].data.axes).toEqual([{ axis: 'ECONOMY', agreeDirection: 'LEFT' }]);
+  });
+
+  it('축을 넘기지 않으면 축 컬럼을 건드리지 않는다', async () => {
+    const { prisma, updates } = createFakePrisma([createIssueRow()], []);
+
+    await new PrismaAdminStore(prisma).updateIssue('issue-1', { question: '바뀐 질문?' });
+
+    expect(updates[0].data).not.toHaveProperty('axes');
   });
 });
 

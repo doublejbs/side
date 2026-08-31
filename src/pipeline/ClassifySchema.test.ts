@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { AxisDirection } from '@/domain/AxisDirection';
+import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
 import { classifySchema } from '@/pipeline/ClassifySchema';
 
 const VALID = {
@@ -10,6 +12,7 @@ const VALID = {
   entities: ['국회', '고용노동부'],
   keySentences: ['적용 범위가 쟁점이다.', '중소기업 부담이 쟁점이다.', '임금 보전이 쟁점이다.'],
   keyClaims: ['삶의 질이 좋아진다', '비용이 늘어난다', '생산성이 관건이다'],
+  axes: [{ axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT }],
   duplicateOfIssueId: null,
 };
 
@@ -55,5 +58,48 @@ describe('classifySchema', () => {
 
   it('빈 문자열은 막는다', () => {
     expect(() => classifySchema.parse({ ...VALID, topic: '   ' })).toThrow();
+  });
+});
+
+describe('classifySchema 관점 축', () => {
+  it('축과 찬성 방향을 그대로 받는다', () => {
+    expect(classifySchema.parse(VALID).axes).toEqual([
+      { axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT },
+    ]);
+  });
+
+  it('확신이 없어 축을 넣지 않으면 빈 배열을 받는다', () => {
+    expect(classifySchema.parse({ ...VALID, axes: [] }).axes).toEqual([]);
+  });
+
+  it('축은 2개를 넘을 수 없다', () => {
+    const axes = [
+      { axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT },
+      { axis: PerspectiveAxis.ECONOMY, agreeDirection: AxisDirection.RIGHT },
+      { axis: PerspectiveAxis.WELFARE, agreeDirection: AxisDirection.LEFT },
+    ];
+
+    expect(() => classifySchema.parse({ ...VALID, axes })).toThrow();
+  });
+
+  it('같은 축을 두 번 담으면 막는다', () => {
+    const axes = [
+      { axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT },
+      { axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.LEFT },
+    ];
+
+    expect(() => classifySchema.parse({ ...VALID, axes })).toThrow();
+  });
+
+  it('정의되지 않은 축이나 방향은 막는다', () => {
+    expect(() =>
+      classifySchema.parse({ ...VALID, axes: [{ axis: '주거', agreeDirection: AxisDirection.LEFT }] }),
+    ).toThrow();
+    expect(() =>
+      classifySchema.parse({
+        ...VALID,
+        axes: [{ axis: PerspectiveAxis.LABOR, agreeDirection: 'UP' }],
+      }),
+    ).toThrow();
   });
 });

@@ -1,7 +1,10 @@
+import type { AxisDirection } from '@/domain/AxisDirection';
 import type { EvidenceType } from '@/domain/EvidenceType';
 import type { MediaPerspective, OpinionGroup } from '@/domain/Issue';
+import { MAX_ISSUE_AXES, type IssueAxis } from '@/domain/IssueAxis';
 import { IssueStatus } from '@/domain/IssueStatus';
 import type { MediaLeaning } from '@/domain/MediaLeaning';
+import type { PerspectiveAxis } from '@/domain/PerspectiveAxis';
 import { normalizeDomain } from '@/pipeline/publisherDirectory';
 import { AdminActionError } from '@/server/AdminActionError';
 import { AdminMessage } from '@/server/AdminMessage';
@@ -40,6 +43,12 @@ export interface ClaimInput {
   description: string;
 }
 
+/** 검수 폼의 관점 축 칸 하나. 축을 고르지 않은 칸은 `axis` 가 null 이다. */
+export interface IssueAxisInput {
+  axis: PerspectiveAxis | null;
+  agreeDirection: AxisDirection;
+}
+
 export interface SaveIssueInput {
   issueId: string;
   question: string;
@@ -53,6 +62,8 @@ export interface SaveIssueInput {
   mediaPerspectives: MediaPerspectiveInput[];
   opinionGroups: OpinionGroupInput[];
   claims: ClaimInput[];
+  /** 관점 축 칸. 넘기지 않으면 저장된 축을 그대로 둔다. */
+  axes?: IssueAxisInput[];
 }
 
 /**
@@ -110,6 +121,24 @@ const clampShare = (share: number): number => {
   }
 
   return Math.min(MAX_SHARE, Math.max(MIN_SHARE, Math.round(share)));
+};
+
+/**
+ * 고르지 않은 칸을 버리고, 같은 축이 겹치면 첫 칸만 남긴다(축이 겹치면 값이 상쇄된다).
+ * 근거: docs/PerspectiveSpec.md 1장.
+ */
+const toIssueAxes = (inputs: IssueAxisInput[]): IssueAxis[] => {
+  const axes: IssueAxis[] = [];
+
+  inputs.forEach((input) => {
+    if (input.axis === null || axes.some((entry) => entry.axis === input.axis)) {
+      return;
+    }
+
+    axes.push({ axis: input.axis, agreeDirection: input.agreeDirection });
+  });
+
+  return axes.slice(0, MAX_ISSUE_AXES);
 };
 
 const toMediaPerspective = (input: MediaPerspectiveInput): MediaPerspective => ({
@@ -202,6 +231,7 @@ export const saveIssue = async (store: AdminStore, input: SaveIssueInput): Promi
     {
       question,
       tags: parseTagList(input.tags),
+      ...(input.axes === undefined ? {} : { axes: toIssueAxes(input.axes) }),
       summary: parseLineList(input.summary),
       keyPoints: input.keyPoints
         .map((keyPoint, index) => ({

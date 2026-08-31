@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { AxisDirection } from '@/domain/AxisDirection';
 import { ClaimFeedback } from '@/domain/ClaimFeedback';
+import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
 import { VoteChoice } from '@/domain/VoteChoice';
 import { InMemoryVoteStore } from '@/server/InMemoryVoteStore';
+import { MAX_MY_VOTE_EVENTS } from '@/server/VoteStore';
 
 const SLUG = 'work-week-4-5';
 const ISSUE_ID = 'issue-1';
@@ -235,5 +238,98 @@ describe('InMemoryVoteStore 익명 레코드 이전', () => {
       disagree: 0,
       unsure: 1,
     });
+  });
+});
+
+describe('InMemoryVoteStore 투표 이력·관점', () => {
+  let eventStore: InMemoryVoteStore;
+
+  beforeEach(() => {
+    eventStore = new InMemoryVoteStore({
+      issues: { [SLUG]: ISSUE_ID, [OTHER_SLUG]: OTHER_ISSUE_ID },
+      issueDetails: {
+        [SLUG]: {
+          question: '주 4.5일제를 도입해야 할까?',
+          axes: [{ axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT }],
+        },
+        [OTHER_SLUG]: { question: 'AI 규제를 강화해야 할까?' },
+      },
+      claims: [{ id: CLAIM_ID, issueSlug: SLUG, title: '노동시간이 줄어든다' }],
+    });
+  });
+
+  it('신규 투표와 선택 변경만 이력으로 남긴다', async () => {
+    await eventStore.castVote(ISSUE_ID, 'user-1', VoteChoice.AGREE);
+    await eventStore.castVote(ISSUE_ID, 'user-1', VoteChoice.AGREE);
+    await eventStore.castVote(ISSUE_ID, 'user-1', VoteChoice.DISAGREE);
+
+    const rows = await eventStore.listMyVoteEvents('user-1');
+
+    expect(rows.map((row) => row.choice)).toEqual([VoteChoice.AGREE, VoteChoice.DISAGREE]);
+    expect(rows[0].question).toBe('주 4.5일제를 도입해야 할까?');
+    expect(rows[0].issueSlug).toBe(SLUG);
+    expect(Date.parse(rows[0].createdAt)).toBeLessThan(Date.parse(rows[1].createdAt));
+  });
+
+  it('발행되지 않은 이슈와 다른 사용자의 이력은 빼고 돌려준다', async () => {
+    await eventStore.castVote(DRAFT_ISSUE_ID, 'user-1', VoteChoice.AGREE);
+    await eventStore.castVote(ISSUE_ID, 'user-2', VoteChoice.AGREE);
+    await eventStore.castVote(ISSUE_ID, 'user-1', VoteChoice.UNSURE);
+
+    const rows = await eventStore.listMyVoteEvents('user-1');
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].choice).toBe(VoteChoice.UNSURE);
+  });
+
+  it('이력이 많으면 최근 상한만큼만 오래된 순으로 돌려준다', async () => {
+    const choices = [VoteChoice.AGREE, VoteChoice.DISAGREE];
+
+    for (let index = 0; index < MAX_MY_VOTE_EVENTS + 10; index += 1) {
+      await eventStore.castVote(ISSUE_ID, 'user-1', choices[index % choices.length]);
+    }
+
+    const rows = await eventStore.listMyVoteEvents('user-1');
+
+    expect(rows).toHaveLength(MAX_MY_VOTE_EVENTS);
+    // 마지막(가장 최근) 이력이 남아야 최근 변화를 잃지 않는다.
+    expect(rows[rows.length - 1].choice).toBe(choices[(MAX_MY_VOTE_EVENTS + 9) % 2]);
+    expect(Date.parse(rows[0].createdAt)).toBeLessThan(Date.parse(rows[1].createdAt));
+  });
+
+  it('익명 표를 계정으로 옮길 때는 이력을 만들지 않는다', async () => {
+    eventStore.seedAnonVote(ISSUE_ID, 'anon-1', VoteChoice.AGREE);
+
+    await eventStore.claimAnonRecords('anon-1', 'user-1');
+
+    await expect(eventStore.listMyVoteEvents('user-1')).resolves.toEqual([]);
+  });
+
+  it('설득됐어요 를 남긴 주장과 전체 피드백 수를 따로 센다', async () => {
+    await eventStore.setClaimFeedback(CLAIM_ID, 'user-1', ClaimFeedback.PERSUADED);
+
+    await expect(eventStore.listMyPersuadedClaims('user-1')).resolves.toEqual([
+      { issueId: ISSUE_ID, claimTitle: '노동시간이 줄어든다' },
+    ]);
+    await expect(eventStore.countMyClaimFeedbacks('user-1')).resolves.toBe(1);
+
+    await eventStore.setClaimFeedback(CLAIM_ID, 'user-1', ClaimFeedback.LACKS_EVIDENCE);
+
+    await expect(eventStore.listMyPersuadedClaims('user-1')).resolves.toEqual([]);
+    await expect(eventStore.countMyClaimFeedbacks('user-1')).resolves.toBe(1);
+  });
+
+  it('발행된 이슈의 내 최신 표를 축과 함께 돌려준다', async () => {
+    await eventStore.castVote(ISSUE_ID, 'user-1', VoteChoice.AGREE);
+    await eventStore.castVote(OTHER_ISSUE_ID, 'user-1', VoteChoice.DISAGREE);
+    await eventStore.castVote(DRAFT_ISSUE_ID, 'user-1', VoteChoice.AGREE);
+
+    await expect(eventStore.listMyVoteAxes('user-1')).resolves.toEqual([
+      {
+        axes: [{ axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT }],
+        choice: VoteChoice.AGREE,
+      },
+      { axes: [], choice: VoteChoice.DISAGREE },
+    ]);
   });
 });

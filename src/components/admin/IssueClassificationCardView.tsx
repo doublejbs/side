@@ -2,7 +2,10 @@ import Link from 'next/link';
 
 import { AdminSectionView } from '@/components/admin/AdminSectionView';
 import { formatAdminDate } from '@/components/admin/formatAdminDate';
+import { AxisDirection } from '@/domain/AxisDirection';
+import type { IssueAxis } from '@/domain/IssueAxis';
 import type { IssueClassification } from '@/domain/IssueClassification';
+import { getAxisLabels } from '@/domain/perspectiveAxisLabels';
 
 import styles from './IssueClassificationCardView.module.css';
 
@@ -21,6 +24,14 @@ const SECTION_DESCRIPTION = 'classify 단계가 매긴 값입니다. 여기서�
 const EMPTY_VALUE = '–';
 
 const formatTimestamp = (date: Date | null): string => (date ? formatAdminDate(date) : EMPTY_VALUE);
+
+/** classify 가 제안한 축의 방향을 사람이 읽는 문구로 옮긴다. 방향은 그 축의 실제 좌우 라벨로 적는다. */
+const formatIssueAxis = (issueAxis: IssueAxis): string => {
+  const { name, leftLabel, rightLabel } = getAxisLabels(issueAxis.axis);
+  const directionLabel = issueAxis.agreeDirection === AxisDirection.LEFT ? leftLabel : rightLabel;
+
+  return `${name} · 찬성이면 ${directionLabel}`;
+};
 
 /**
  * 검수 폼 상단의 읽기 전용 분류 카드.
@@ -89,6 +100,19 @@ export const IssueClassificationCardView = ({
             ))}
           </ul>
         </div>
+
+        {classification.axes && classification.axes.length > 0 ? (
+          <div className={styles.block}>
+            <h3 className={styles.blockTitle}>제안 축</h3>
+            <div className={styles.chips}>
+              {classification.axes.map((issueAxis) => (
+                <span key={issueAxis.axis} className={styles.chip}>
+                  {formatIssueAxis(issueAxis)}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div className={styles.block}>
           <h3 className={styles.blockTitle}>인물·기관</h3>

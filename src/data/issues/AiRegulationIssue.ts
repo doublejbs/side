@@ -1,6 +1,8 @@
+import { AxisDirection } from '@/domain/AxisDirection';
 import { ClaimSide } from '@/domain/ClaimSide';
 import { EvidenceType } from '@/domain/EvidenceType';
 import { MediaLeaning } from '@/domain/MediaLeaning';
+import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
 import type { Issue } from '@/domain/Issue';
 
 export const aiRegulationIssue: Issue = {
@@ -8,6 +10,7 @@ export const aiRegulationIssue: Issue = {
   slug: 'ai-regulation',
   question: 'AI 규제를 강화해야 할까?',
   tags: ['기술', '산업'],
+  axes: [{ axis: PerspectiveAxis.ECONOMY, agreeDirection: AxisDirection.RIGHT }],
   participantCount: 5140,
   distribution: { agree: 38, disagree: 49, unsure: 13 },
   summary: [

@@ -466,6 +466,7 @@ const CLASSIFY_RESPONSE = {
   entities: ['국회'],
   keySentences: ['예산 규모가 쟁점이다.', '증액 항목이 쟁점이다.', '처리 시한이 쟁점이다.'],
   keyClaims: ['재정 건전성을 지켜야 한다', '경기 부양이 필요하다', '심사 기간이 짧다'],
+  axes: [],
   duplicateOfIssueId: null,
 };
 

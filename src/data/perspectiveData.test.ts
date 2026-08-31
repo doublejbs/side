@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { OPINION_CHANGES, PERSPECTIVE_POINTS } from '@/data/perspectiveData';
+import {
+  OPINION_CHANGES,
+  PARTICIPATION_SUMMARY,
+  PERSPECTIVE_POINTS,
+} from '@/data/perspectiveData';
 import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
+import { getAxisLabels } from '@/domain/perspectiveAxisLabels';
 import { MockIssueRepository } from '@/data/MockIssueRepository';
 
 const repository = new MockIssueRepository();
@@ -18,10 +23,22 @@ describe('perspectiveData', () => {
     ]);
 
     PERSPECTIVE_POINTS.forEach((point) => {
+      const labels = getAxisLabels(point.axis);
+
       expect(point.value).toBeGreaterThanOrEqual(0);
       expect(point.value).toBeLessThanOrEqual(100);
-      expect(point.leftLabel.length).toBeGreaterThan(0);
-      expect(point.rightLabel.length).toBeGreaterThan(0);
+      expect(point.leftLabel).toBe(labels.leftLabel);
+      expect(point.rightLabel).toBe(labels.rightLabel);
+    });
+  });
+
+  it('축마다 기준이 된 투표 수를 함께 제공한다', () => {
+    const total = PERSPECTIVE_POINTS.reduce((sum, point) => sum + point.voteCount, 0);
+
+    expect(total).toBe(PARTICIPATION_SUMMARY.patternIssueCount);
+
+    PERSPECTIVE_POINTS.forEach((point) => {
+      expect(point.voteCount).toBeGreaterThan(0);
     });
   });
 

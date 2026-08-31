@@ -15,36 +15,42 @@ export const PARTICIPATION_SUMMARY: ParticipationSummary = {
   readEvidenceCount: 42,
 };
 
+/** 목 관점 축. `voteCount` 합이 `PARTICIPATION_SUMMARY.patternIssueCount` 와 맞도록 둔다. */
 export const PERSPECTIVE_POINTS: PerspectivePoint[] = [
   {
     axis: PerspectiveAxis.ECONOMY,
     leftLabel: '시장 중심',
     rightLabel: '정부 역할',
     value: 62,
+    voteCount: 4,
   },
   {
     axis: PerspectiveAxis.WELFARE,
     leftLabel: '개인 책임',
     rightLabel: '사회 책임',
     value: 28,
+    voteCount: 3,
   },
   {
     axis: PerspectiveAxis.LABOR,
     leftLabel: '기업 중심',
     rightLabel: '노동자 중심',
     value: 70,
+    voteCount: 5,
   },
   {
     axis: PerspectiveAxis.ENVIRONMENT,
     leftLabel: '성장',
     rightLabel: '환경',
     value: 34,
+    voteCount: 3,
   },
   {
     axis: PerspectiveAxis.DIPLOMACY,
     leftLabel: '현실주의',
     rightLabel: '이상주의',
     value: 58,
+    voteCount: 3,
   },
 ];
 

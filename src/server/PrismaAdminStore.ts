@@ -5,6 +5,7 @@ import {
   keyPointsSchema,
   mediaPerspectivesSchema,
   opinionGroupsSchema,
+  parseIssueAxes,
 } from '@/data/IssueJsonSchemas';
 import {
   toDomainClaimSide,
@@ -16,6 +17,7 @@ import {
   toPrismaIssueStatus,
   toPrismaMediaLeaning,
 } from '@/data/PrismaEnumMappers';
+import { toPrismaJson } from '@/data/toPrismaJson';
 import type { EvidenceSupport } from '@/domain/EvidenceSupport';
 import type { KeyPoint, MediaPerspective, OpinionGroup } from '@/domain/Issue';
 import type { IssueClassification } from '@/domain/IssueClassification';
@@ -75,8 +77,6 @@ const parseClassification = (value: unknown): IssueClassification | null => {
 const parseEvidenceSupport = (value: string | null): EvidenceSupport | null =>
   value === null ? null : toDomainEvidenceSupport(value);
 
-const toJson = (value: unknown): Prisma.InputJsonValue => value as Prisma.InputJsonValue;
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** 병합 대상으로 고를 수 있는 상태. 반려·자동 제외 이슈에는 기사를 옮기지 않는다. */
@@ -115,13 +115,14 @@ const ARTICLE_TAKE = 200;
 const toIssueUpdateData = (patch: AdminIssuePatch): Prisma.IssueUpdateInput => ({
   ...(patch.question === undefined ? {} : { question: patch.question }),
   ...(patch.tags === undefined ? {} : { tags: patch.tags }),
+  ...(patch.axes === undefined ? {} : { axes: toPrismaJson(patch.axes) }),
   ...(patch.summary === undefined ? {} : { summary: patch.summary }),
-  ...(patch.keyPoints === undefined ? {} : { keyPoints: toJson(patch.keyPoints) }),
+  ...(patch.keyPoints === undefined ? {} : { keyPoints: toPrismaJson(patch.keyPoints) }),
   ...(patch.commonCoverage === undefined ? {} : { commonCoverage: patch.commonCoverage }),
   ...(patch.mediaPerspectives === undefined
     ? {}
-    : { mediaPerspectives: toJson(patch.mediaPerspectives) }),
-  ...(patch.opinionGroups === undefined ? {} : { opinionGroups: toJson(patch.opinionGroups) }),
+    : { mediaPerspectives: toPrismaJson(patch.mediaPerspectives) }),
+  ...(patch.opinionGroups === undefined ? {} : { opinionGroups: toPrismaJson(patch.opinionGroups) }),
 });
 
 /** Prisma 로 관리자 검수 데이터를 읽고 쓴다. */
@@ -170,6 +171,7 @@ export class PrismaAdminStore implements AdminStore {
         slug: true,
         question: true,
         tags: true,
+        axes: true,
         summary: true,
         keyPoints: true,
         commonCoverage: true,
@@ -230,6 +232,7 @@ export class PrismaAdminStore implements AdminStore {
       slug: row.slug,
       question: row.question,
       tags: row.tags,
+      axes: parseIssueAxes(row.axes),
       summary: row.summary,
       keyPoints: parseKeyPoints(row.keyPoints),
       commonCoverage: row.commonCoverage,

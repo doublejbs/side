@@ -2,6 +2,7 @@ import {
   keyPointsSchema,
   mediaPerspectivesSchema,
   opinionGroupsSchema,
+  parseIssueAxes,
 } from '@/data/IssueJsonSchemas';
 import {
   toDomainClaimSide,
@@ -49,6 +50,8 @@ export interface IssueRow {
   slug: string | null;
   question: string;
   tags: string[];
+  /** IssueAxis[]. 아직 축이 정해지지 않았으면 null. */
+  axes: unknown;
   summary: string[];
   keyPoints: unknown;
   commonCoverage: string[];
@@ -157,6 +160,7 @@ export const mapIssueRow = (row: IssueRow, aggregates: IssueAggregates): Issue =
     slug: row.slug ?? row.id,
     question: row.question,
     tags: row.tags,
+    axes: parseIssueAxes(row.axes),
     participantCount: aggregates.participantCount,
     distribution: aggregates.distribution,
     summary: row.summary,

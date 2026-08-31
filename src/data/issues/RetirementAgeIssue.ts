@@ -1,6 +1,8 @@
+import { AxisDirection } from '@/domain/AxisDirection';
 import { ClaimSide } from '@/domain/ClaimSide';
 import { EvidenceType } from '@/domain/EvidenceType';
 import { MediaLeaning } from '@/domain/MediaLeaning';
+import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
 import type { Issue } from '@/domain/Issue';
 
 export const retirementAgeIssue: Issue = {
@@ -8,6 +10,7 @@ export const retirementAgeIssue: Issue = {
   slug: 'retirement-65',
   question: '정년을 65세로 연장해야 할까?',
   tags: ['노동', '복지'],
+  axes: [{ axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT }],
   participantCount: 6317,
   distribution: { agree: 52, disagree: 29, unsure: 19 },
   summary: [

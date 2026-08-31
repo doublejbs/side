@@ -1,6 +1,9 @@
 import { IssueStatus } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 
+import { AxisDirection } from '@/domain/AxisDirection';
+import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
+
 import {
   autoRejectedNote,
   classifyIssues,
@@ -25,6 +28,7 @@ const CLASSIFY_RESPONSE = {
   entities: ['국회', '고용노동부'],
   keySentences: ['적용 범위가 쟁점이다.', '중소기업 부담이 쟁점이다.', '임금 보전이 쟁점이다.'],
   keyClaims: ['삶의 질이 좋아진다', '비용이 늘어난다', '생산성이 관건이다'],
+  axes: [{ axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT }],
   duplicateOfIssueId: null,
 };
 
@@ -83,6 +87,28 @@ describe('classifyIssues', () => {
     expect(db.issues[0].classifiedAt).toEqual(NOW);
     expect(db.issues[0].classification).toMatchObject({ isPolicyDebate: true, reason: CLASSIFY_RESPONSE.reason });
     expect(db.issues[0].reviewNote).toBeNull();
+  });
+
+  it('모델이 제안한 관점 축을 이슈와 분류 결과에 함께 저장한다', async () => {
+    const { db, prisma } = createFakePrismaClient(seed());
+
+    await classifyIssues({ prisma, nanoTextClient: createNanoClient(), now: NOW });
+
+    expect(db.issues[0].axes).toEqual([
+      { axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT },
+    ]);
+    expect(db.issues[0].classification).toMatchObject({
+      axes: [{ axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT }],
+    });
+  });
+
+  it('축에 확신이 없다는 응답이면 축을 비워 저장한다', async () => {
+    const { db, prisma } = createFakePrismaClient(seed());
+    const nanoTextClient = createNanoClient({ ...CLASSIFY_RESPONSE, axes: [] });
+
+    await classifyIssues({ prisma, nanoTextClient, now: NOW });
+
+    expect(db.issues[0].axes).toEqual([]);
   });
 
   it('정책 논쟁이 아니면 자동 제외하고 판정 근거를 메모에 남긴다', async () => {

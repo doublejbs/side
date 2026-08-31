@@ -1,6 +1,7 @@
 import { ClaimSide } from '@/domain/ClaimSide';
 import { EvidenceSupport } from '@/domain/EvidenceSupport';
 import { EvidenceType } from '@/domain/EvidenceType';
+import type { IssueAxis } from '@/domain/IssueAxis';
 import { MediaLeaning } from '@/domain/MediaLeaning';
 
 /** 퍼센트 값. agree + disagree + unsure = 100 */
@@ -70,6 +71,8 @@ export interface Issue {
   slug: string;
   question: string;
   tags: string[];
+  /** 이 이슈가 걸린 관점 축(0~2개). 근거: docs/PerspectiveSpec.md 1장. */
+  axes: IssueAxis[];
   participantCount: number;
   distribution: VoteDistribution;
   summary: string[];

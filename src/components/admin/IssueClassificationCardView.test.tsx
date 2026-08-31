@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/react';
 
+import { AxisDirection } from '@/domain/AxisDirection';
 import type { IssueClassification } from '@/domain/IssueClassification';
+import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
 
 import { IssueClassificationCardView } from './IssueClassificationCardView';
 
@@ -59,6 +61,27 @@ describe('IssueClassificationCardView', () => {
     renderCard(createClassification());
 
     expect(screen.queryByRole('link', { name: '중복 후보 이슈 열기' })).not.toBeInTheDocument();
+  });
+
+  it('분류가 제안한 축을 방향 라벨과 함께 읽기 전용으로 보여준다', () => {
+    renderCard(
+      createClassification({
+        axes: [
+          { axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT },
+          { axis: PerspectiveAxis.ECONOMY, agreeDirection: AxisDirection.LEFT },
+        ],
+      }),
+    );
+
+    expect(screen.getByText('제안 축')).toBeInTheDocument();
+    expect(screen.getByText('노동 · 찬성이면 노동자 중심')).toBeInTheDocument();
+    expect(screen.getByText('경제 · 찬성이면 시장 중심')).toBeInTheDocument();
+  });
+
+  it('제안 축이 없으면 축 영역을 생략한다', () => {
+    renderCard(createClassification({ axes: [] }));
+
+    expect(screen.queryByText('제안 축')).not.toBeInTheDocument();
   });
 
   it('아직 분류되지 않았으면 안내만 보여준다', () => {

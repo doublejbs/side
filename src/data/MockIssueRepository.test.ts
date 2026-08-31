@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import { AxisDirection } from '@/domain/AxisDirection';
 import { ClaimSide } from '@/domain/ClaimSide';
 import { EvidenceType } from '@/domain/EvidenceType';
+import { issueAxesSchema } from '@/data/IssueJsonSchemas';
 import { MediaLeaning } from '@/domain/MediaLeaning';
+import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
 import { MockIssueRepository } from '@/data/MockIssueRepository';
 import type { Issue } from '@/domain/Issue';
 
@@ -16,6 +19,18 @@ const EXPECTED_ISSUES = [
   { slug: 'ai-regulation', participantCount: 5140, distribution: { agree: 38, disagree: 49, unsure: 13 }, tags: ['기술', '산업'] },
   { slug: 'property-tax', participantCount: 4760, distribution: { agree: 41, disagree: 46, unsure: 13 }, tags: ['부동산', '경제'] },
 ];
+
+/** 스펙 1장의 시드 축 지정. 시드 스크립트가 이 값을 그대로 저장한다. */
+const EXPECTED_AXES: Record<string, { axis: PerspectiveAxis; agreeDirection: AxisDirection }[]> = {
+  'work-week-4-5': [{ axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT }],
+  'nuclear-expansion': [{ axis: PerspectiveAxis.ENVIRONMENT, agreeDirection: AxisDirection.LEFT }],
+  'retirement-65': [{ axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT }],
+  'ai-regulation': [{ axis: PerspectiveAxis.ECONOMY, agreeDirection: AxisDirection.RIGHT }],
+  'property-tax': [
+    { axis: PerspectiveAxis.ECONOMY, agreeDirection: AxisDirection.RIGHT },
+    { axis: PerspectiveAxis.WELFARE, agreeDirection: AxisDirection.RIGHT },
+  ],
+};
 
 const claimsOf = (issue: Issue, side: ClaimSide) =>
   issue.claims.filter((claim) => claim.side === side);
@@ -55,6 +70,13 @@ describe('MockIssueRepository', () => {
       expect(issue.participantCount).toBe(expected.participantCount);
       expect(issue.distribution).toEqual(expected.distribution);
       expect(issue.tags).toEqual(expected.tags);
+    });
+  });
+
+  it('스펙 1장의 관점 축을 이슈마다 지정한다', () => {
+    issues.forEach((issue) => {
+      expect(issue.axes).toEqual(EXPECTED_AXES[issue.slug]);
+      expect(issueAxesSchema.safeParse(issue.axes).success).toBe(true);
     });
   });
 

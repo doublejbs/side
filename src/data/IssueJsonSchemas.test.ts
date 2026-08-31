@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { issueClassificationSchema } from '@/data/IssueJsonSchemas';
+import { issueAxesSchema, issueClassificationSchema } from '@/data/IssueJsonSchemas';
+import { AxisDirection } from '@/domain/AxisDirection';
+import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
 
 const VALID = {
   isPolicyDebate: true,
@@ -28,5 +30,38 @@ describe('issueClassificationSchema', () => {
     expect(issueClassificationSchema.safeParse({ ...VALID, debateScore: '82' }).success).toBe(false);
     expect(issueClassificationSchema.safeParse({ ...VALID, keyClaims: undefined }).success).toBe(false);
     expect(issueClassificationSchema.safeParse(null).success).toBe(false);
+  });
+});
+
+describe('issueAxesSchema', () => {
+  it('빈 배열과 축 1~2개를 받아들인다', () => {
+    expect(issueAxesSchema.parse([])).toEqual([]);
+    expect(
+      issueAxesSchema.parse([
+        { axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT },
+        { axis: PerspectiveAxis.ECONOMY, agreeDirection: AxisDirection.LEFT },
+      ]),
+    ).toHaveLength(2);
+  });
+
+  it('같은 축을 두 번 지정하면 거부한다', () => {
+    expect(
+      issueAxesSchema.safeParse([
+        { axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT },
+        { axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.LEFT },
+      ]).success,
+    ).toBe(false);
+  });
+
+  it('축이 3개 이상이거나 값이 어긋나면 거부한다', () => {
+    expect(
+      issueAxesSchema.safeParse([
+        { axis: PerspectiveAxis.LABOR, agreeDirection: AxisDirection.RIGHT },
+        { axis: PerspectiveAxis.ECONOMY, agreeDirection: AxisDirection.LEFT },
+        { axis: PerspectiveAxis.WELFARE, agreeDirection: AxisDirection.LEFT },
+      ]).success,
+    ).toBe(false);
+    expect(issueAxesSchema.safeParse([{ axis: '노동', agreeDirection: 'RIGHT' }]).success).toBe(false);
+    expect(issueAxesSchema.safeParse(null).success).toBe(false);
   });
 });

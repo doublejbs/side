@@ -1,3 +1,5 @@
+import { AxisDirection } from '@/domain/AxisDirection';
+import { ALL_PERSPECTIVE_AXES, getAxisLabels } from '@/domain/perspectiveAxisLabels';
 import { ARTICLE_INJECTION_GUARD, wrapArticles } from '@/pipeline/prompts/ArticleBoundary';
 import { NEUTRALITY_PRINCIPLES } from '@/pipeline/prompts/NeutralityPrinciples';
 import { formatPromptArticles, type PromptArticle } from '@/pipeline/prompts/PromptArticle';
@@ -29,6 +31,16 @@ export const NON_DEBATE_EXAMPLES = [
   '- 스포츠·연예: 경기 결과, 작품·출연진 소식',
 ].join('\n');
 
+/**
+ * 관점 축 5개의 정의. 축 코드와 좌우 방향 라벨을 그대로 보여줘야 모델이 방향을 뒤집지 않는다.
+ * 근거: `docs/PerspectiveSpec.md` 1장.
+ */
+export const PERSPECTIVE_AXIS_DEFINITIONS = ALL_PERSPECTIVE_AXES.map((axis) => {
+  const labels = getAxisLabels(axis);
+
+  return `- ${axis}(${labels.name}): ${AxisDirection.LEFT}=${labels.leftLabel}, ${AxisDirection.RIGHT}=${labels.rightLabel}`;
+}).join('\n');
+
 /** 이슈 분류(4.1장) 시스템 프롬프트. */
 export const buildClassifySystemPrompt = (): string =>
   [
@@ -55,6 +67,10 @@ export const buildClassifySystemPrompt = (): string =>
     '- entities: 기사에 등장한 인물·기관·정책명 최대 8개. 평가 없이 이름만 적는다.',
     '- keySentences: 쟁점의 요지를 담은 문장 3~5개. 기사 원문 요약이 아니라 무엇이 걸려 있는지를 쓴다.',
     '- keyClaims: 이 이슈에서 오간 주요 주장의 요지 3~6개. 찬반을 구분하지 않고 나열한다.',
+    '- axes: 이 질문이 걸려 있는 관점 축 0~2개. 축은 아래 목록의 코드만 쓴다.',
+    '  agreeDirection 은 "이 질문에 찬성하는 것이 그 축의 어느 방향인가" 다.',
+    '  같은 축을 두 번 넣지 않는다. 해당하는 축이 없거나 방향에 확신이 없으면 빈 배열로 둔다.',
+    PERSPECTIVE_AXIS_DEFINITIONS,
     '- duplicateOfIssueId: 아래 기존 이슈 목록에 같은 이슈가 있으면 그 id, 없으면 null.',
     '  목록에 없는 id 를 지어내지 않는다.',
   ].join('\n');

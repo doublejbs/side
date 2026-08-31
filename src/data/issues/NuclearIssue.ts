@@ -1,6 +1,8 @@
+import { AxisDirection } from '@/domain/AxisDirection';
 import { ClaimSide } from '@/domain/ClaimSide';
 import { EvidenceType } from '@/domain/EvidenceType';
 import { MediaLeaning } from '@/domain/MediaLeaning';
+import { PerspectiveAxis } from '@/domain/PerspectiveAxis';
 import type { Issue } from '@/domain/Issue';
 
 export const nuclearIssue: Issue = {
@@ -8,6 +10,7 @@ export const nuclearIssue: Issue = {
   slug: 'nuclear-expansion',
   question: '원전 비중을 확대해야 할까?',
   tags: ['에너지', '환경'],
+  axes: [{ axis: PerspectiveAxis.ENVIRONMENT, agreeDirection: AxisDirection.LEFT }],
   participantCount: 8902,
   distribution: { agree: 44, disagree: 41, unsure: 15 },
   summary: [

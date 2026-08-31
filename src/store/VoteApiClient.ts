@@ -8,6 +8,7 @@ import type {
 } from '@/domain/VoteApiTypes';
 import { LoginRequiredError } from '@/store/LoginRequiredError';
 import { invalidateMyVotes } from '@/store/MyVotesCache';
+import { invalidateMyPerspective } from '@/store/PerspectiveCache';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
@@ -42,6 +43,8 @@ export const castVoteRequest = async (
 
   // 표가 하나 늘거나 바뀌었으므로 "나"·"발견" 탭이 쓰는 내 투표 목록을 다시 받아오게 한다.
   invalidateMyVotes();
+  // 표가 바뀌면 관점 축 값과 의견 변화 기록도 다시 계산해야 한다.
+  invalidateMyPerspective();
 
   return result;
 };
@@ -67,5 +70,10 @@ export const sendClaimFeedback = async (
     body: JSON.stringify(body),
   });
 
-  return readJson<ClaimFeedbackResponse>(response);
+  const result = await readJson<ClaimFeedbackResponse>(response);
+
+  // 근거 피드백 수와 "무엇이 생각을 바꿨나요" 연결이 달라지므로 나 탭 계산을 다시 받아오게 한다.
+  invalidateMyPerspective();
+
+  return result;
 };
